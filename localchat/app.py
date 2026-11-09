@@ -1,14 +1,14 @@
 import html
 import os
+import re
 import secrets
 import socket
 import threading
-import textwrap
 
 import requests
 
 from PySide6.QtCore import QProcess, QProcessEnvironment, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -153,36 +153,6 @@ def build_stylesheet() -> str:
         color: #e0fff7;
         font-size: 14px;
         line-height: 1.55;
-    }
-
-    .message {
-        margin: 10px 0;
-        padding: 14px 16px;
-        border-radius: 14px;
-        border: 1px solid rgba(101, 230, 197, 0.15);
-    }
-
-    .user-message {
-        background: rgba(15, 46, 42, 0.72);
-        margin-left: 92px;
-    }
-
-    .assistant-message {
-        background: rgba(6, 26, 22, 0.9);
-        margin-right: 92px;
-    }
-
-    .label {
-        color: #8ef5d2;
-        font-size: 10px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        margin-bottom: 8px;
-    }
-
-    .body {
-        color: #eafef6;
-        white-space: pre-wrap;
     }
 
     #composer {
@@ -384,6 +354,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Fuserio")
         self.resize(1440, 900)
         self.setStyleSheet(build_stylesheet())
+        self.logo_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "assets",
+            "fus-fuserio.png",
+        )
+        self.setWindowIcon(QIcon(self.logo_path))
         self.messages: list[dict[str, str]] = []
         self.base_url = ""
         self.api_key = ""
@@ -446,6 +422,18 @@ class MainWindow(QMainWindow):
 
         brand = QLabel("Fuserio")
         brand.setObjectName("brand")
+        brand_logo = QLabel()
+        brand_logo.setObjectName("brandLogo")
+        brand_logo.setFixedSize(44, 44)
+        brand_logo.setPixmap(
+            QPixmap(self.logo_path).scaled(
+                44,
+                44,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+        )
+        header_layout.addWidget(brand_logo)
         header_layout.addWidget(brand)
         header_layout.addStretch()
 
@@ -511,16 +499,7 @@ class MainWindow(QMainWindow):
             item.setToolTip(preview)
             self.chat_list.addItem(item)
 
-        self.chat_view.setHtml(
-            textwrap.dedent(
-                """
-                <div class="message assistant-message">
-                    <div class="label">Fuserio</div>
-                    <div class="body">Choose a local model, wait for its ready status, then send a message.</div>
-                </div>
-                """
-            )
-        )
+        self._render_messages()
 
     def new_chat(self):
         if self.chat_worker and self.chat_worker.isRunning():
@@ -528,16 +507,7 @@ class MainWindow(QMainWindow):
         self.messages.clear()
         self.chat_view.clear()
         self.input.clear()
-        self.chat_view.setHtml(
-            textwrap.dedent(
-                """
-                <div class="message assistant-message">
-                    <div class="label">Local AI</div>
-                    <div class="body">New workspace ready. Ask for a patch, a design note, or an architecture review.</div>
-                </div>
-                """
-            )
-        )
+        self._render_messages()
         self.statusBar().showMessage("Fresh session started")
 
     def stop_streaming(self):
@@ -755,24 +725,118 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Response complete.")
 
     def _render_messages(self):
-        blocks = []
-        for message in self.messages:
+        document = [
+            '<html><body style="background-color:#050d0c;color:#e8f4ef;'
+            'font-family:monospace;font-size:13px;margin:12px;">',
+            '<table width="100%" cellspacing="0" cellpadding="0"><tr>',
+            '<td style="color:#61efba;font-size:10px;">FUSERIO <span style="color:#57756b;">/</span> ',
+            'PRIVATE INFERENCE SESSION</td>',
+            '<td align="right" style="color:#648078;font-size:10px;">',
+            '<span style="color:#55e7ae;">●</span> LOOPBACK ONLY</td>',
+            '</tr></table>',
+            '<hr color="#17332c" size="1">',
+        ]
+
+        if not self.messages:
+            document.append(
+                '<table width="100%" height="360" cellspacing="0" cellpadding="0">'
+                '<tr><td align="center" valign="middle">'
+                '<table cellspacing="0" cellpadding="18" bgcolor="#091713" '
+                'border="1" bordercolor="#1d493a"><tr><td>'
+                '<div style="color:#5ce8ad;font-size:10px;">[ CHANNEL READY ]</div><br>'
+                '<div style="color:#effff7;font-size:24px;font-weight:bold;">Ready to build.</div><br>'
+                '<div style="color:#91aa9e;">Send a prompt to begin a private local session.</div>'
+                '</td></tr></table></td></tr></table>'
+            )
+
+        for turn_number, message in enumerate(self.messages, start=1):
             role = message["role"]
-            label = "You" if role == "user" else "Local AI"
-            css_class = "user-message" if role == "user" else "assistant-message"
-            content = html.escape(message.get("content", "")).replace("\n", "<br>")
-            reasoning = html.escape(message.get("reasoning", "")).replace("\n", "<br>")
-            thought_html = (
-                f'<div class="label">Thinking</div><div class="body">{reasoning}</div>'
-                if reasoning else ""
+            content = self._format_message_content(message.get("content", ""))
+            turn_label = f"TURN {turn_number:03d}"
+
+            if role == "user":
+                document.append(
+                    '<table width="100%" cellspacing="0" cellpadding="0"><tr><td align="right">'
+                    '<table width="78%" cellspacing="0" cellpadding="0" bgcolor="#111b18" '
+                    'border="1" bordercolor="#59432b"><tr>'
+                    '<td width="4" bgcolor="#f2ad62"></td>'
+                    '<td style="padding:14px 18px;">'
+                    '<table width="100%" cellspacing="0" cellpadding="0"><tr>'
+                    '<td><span style="color:#ffcb8c;font-weight:bold;">YOU</span> '
+                    '<span style="color:#6b6251;">/ OPERATOR</span></td>'
+                    f'<td align="right" style="color:#8e765a;font-size:10px;">{turn_label} · OUTBOUND</td>'
+                    '</tr></table><br>'
+                    f'<div style="color:#f4efe4;line-height:1.55;">{content}</div>'
+                    '</td></tr></table></td></tr></table><br>'
+                )
+                continue
+
+            reasoning = self._format_message_content(message.get("reasoning", ""))
+            if reasoning:
+                reasoning_panel = (
+                    '<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#071513" '
+                    'border="1" bordercolor="#17423a"><tr>'
+                    '<td width="3" bgcolor="#45c8c0"></td>'
+                    '<td style="padding:10px 14px;">'
+                    '<div style="color:#62d8d0;font-size:10px;font-weight:bold;">'
+                    'THINK TRACE <span style="color:#507873;">/ INTERNAL REASONING</span></div><br>'
+                    f'<div style="color:#a1c9c1;line-height:1.5;">{reasoning}</div>'
+                    '</td></tr></table><br>'
+                )
+            else:
+                reasoning_panel = ""
+
+            if not content:
+                content = '<span style="color:#65efb9;">▋</span> '
+                '<span style="color:#719087;">WAITING FOR MODEL TOKENS</span>'
+
+            document.append(
+                '<table width="100%" cellspacing="0" cellpadding="0"><tr><td>'
+                '<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#0a1714" '
+                'border="1" bordercolor="#1c4537"><tr>'
+                '<td width="4" bgcolor="#59edaa"></td>'
+                '<td style="padding:15px 19px;">'
+                '<table width="100%" cellspacing="0" cellpadding="0"><tr>'
+                '<td><span style="color:#70f2b7;font-weight:bold;">FUSERIO</span> '
+                '<span style="color:#5c8375;">/ LOCAL INTELLIGENCE</span></td>'
+                f'<td align="right" style="color:#5e8878;font-size:10px;">{turn_label} · INBOUND</td>'
+                f'</tr></table><br>{reasoning_panel}'
+                f'<div style="color:#e5f5ec;line-height:1.6;">{content}</div>'
+                '</td></tr></table></td></tr></table><br>'
             )
-            blocks.append(
-                f'<div class="message {css_class}"><div class="label">{label}</div>'
-                f'{thought_html}<div class="body">{content}</div></div>'
-            )
-        self.chat_view.setHtml("".join(blocks))
+
+        document.append('</body></html>')
+        self.chat_view.setHtml("".join(document))
         scrollbar = self.chat_view.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+
+    @staticmethod
+    def _format_message_content(content: str) -> str:
+        pieces = content.split("```")
+        rendered = []
+        for index, piece in enumerate(pieces):
+            if index % 2:
+                code_lines = piece.split("\n", 1)
+                language = code_lines[0].strip()
+                code = code_lines[1] if len(code_lines) > 1 else code_lines[0]
+                language_label = html.escape(language.upper() or "CODE")
+                rendered.append(
+                    '<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#050d0c" '
+                    'border="1" bordercolor="#254239"><tr><td style="padding:8px 12px;">'
+                    f'<div style="color:#69d9a8;font-size:9px;">{language_label} / CODE BLOCK</div>'
+                    f'<pre style="color:#d8eee3;font-family:monospace;white-space:pre-wrap;">'
+                    f'{html.escape(code)}</pre></td></tr></table>'
+                )
+                continue
+
+            escaped = html.escape(piece).replace("\n", "<br>")
+            escaped = re.sub(
+                r"`([^`]+)`",
+                r'<span style="color:#9ee7bf;background-color:#13261f;">\1</span>',
+                escaped,
+            )
+            rendered.append(escaped)
+        return "".join(rendered)
 
     def closeEvent(self, event):
         if self.chat_worker and self.chat_worker.isRunning():

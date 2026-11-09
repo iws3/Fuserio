@@ -38,6 +38,12 @@ cd ~/llama.cpp
 
 This project uses PySide6, requests, and pytest.
 
+## Branding
+
+- `fus.png` is the supplied source logo.
+- `assets/fus-fuserio.png` is the Fuserio green and teal version used by the app window and desktop launcher.
+- Run `./install.sh` after a fresh checkout to install the desktop shortcut with the branded icon.
+
 ## Notes
 
 - The interface is intentionally styled like a developer-focused hacker console.
