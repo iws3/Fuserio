@@ -44,6 +44,10 @@ This project uses PySide6, requests, and pytest.
 - `assets/fus-fuserio.png` is the Fuserio green and teal version used by the app window and desktop launcher.
 - Run `./install.sh` after a fresh checkout to install the desktop shortcut with the branded icon.
 
+## GCE Study Progress
+
+The GCE Study flow covers Ordinary Level and Advanced Level subjects across Sciences, Arts, Languages and Commercial streams. Your last selection, conversations and chosen study modes are saved locally in `~/.local/share/localchat/gce-progress.json` so you can resume a subject later. The tutor follows a subject-specific prompt and labels suggested topic areas as a study scaffold, not an official or exhaustive syllabus.
+
 ## Notes
 
 - The interface is intentionally styled like a developer-focused hacker console.
