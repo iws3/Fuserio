@@ -89,6 +89,20 @@ def test_level_stream_subject_navigation_and_back(window):
     assert window.content_stack.currentWidget() is window.level_page
 
 
+def test_startup_offers_levels_and_sidebar_links_switch_workspaces(window):
+    from PySide6.QtWidgets import QLabel
+
+    assert window.content_stack.currentWidget() is window.level_page
+    assert window.gce_study_button.text() == "GCE Learning"
+    assert window.ai_workspace_button.text() == "AI Workspace"
+    assert not window.findChild(QLabel, "startLogo").pixmap().isNull()
+
+    window.ai_workspace_button.click()
+    assert window.content_stack.currentWidget() is window.chat_page
+    window.gce_study_button.click()
+    assert window.content_stack.currentWidget() is window.level_page
+
+
 def test_greeting_modes_and_typed_questions_use_subject_prompt(window):
     window.select_gce_level("Ordinary Level")
     window.select_gce_stream("Sciences")

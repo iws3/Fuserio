@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from PySide6.QtGui import QTextDocument
 
 from localchat.client import stream_chat
 from localchat.gce import (
@@ -536,14 +537,25 @@ class MainWindow(QMainWindow):
         self._build_gce_pages()
 
         self.gce_study_button = QPushButton("GCE Study")
+        self.gce_study_button.setText("GCE Learning")
         self.gce_study_button.setObjectName("newChatButton")
+        self.gce_study_button.setAccessibleName("Open GCE level and subject selection")
         side_layout.insertWidget(1, self.gce_study_button)
         self.gce_study_button.clicked.connect(self.open_gce_levels)
+
+        self.ai_workspace_button = QPushButton("AI Workspace")
+        self.ai_workspace_button.setObjectName("newChatButton")
+        self.ai_workspace_button.setAccessibleName("Open general AI chat workspace")
+        side_layout.insertWidget(2, self.ai_workspace_button)
+        self.ai_workspace_button.clicked.connect(self.open_ai_workspace)
 
         outer.addWidget(sidebar, 1)
         outer.addWidget(main_panel, 5)
 
         self.setCentralWidget(root)
+        self.content_stack.setCurrentWidget(self.level_page)
+        self.gce_screen = "level"
+        self.back_button.hide()
         self.statusBar().showMessage("Connecting to local model...")
         new_chat.clicked.connect(self.new_chat)
         QShortcut(QKeySequence("Ctrl+N"), self, self.new_chat)
@@ -614,6 +626,18 @@ class MainWindow(QMainWindow):
             "Select the exam level you are preparing for.",
         )
         level_layout = self.level_page.layout()
+        start_logo = QLabel()
+        start_logo.setObjectName("startLogo")
+        start_logo.setAlignment(Qt.AlignCenter)
+        start_logo.setPixmap(
+            QPixmap(self.logo_path).scaled(
+                72,
+                72,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+        )
+        level_layout.addWidget(start_logo)
         level_grid = QGridLayout()
         level_grid.setSpacing(14)
         for column, level in enumerate(("Ordinary Level", "Advanced Level")):
@@ -694,6 +718,19 @@ class MainWindow(QMainWindow):
         self.back_button.show()
         self.content_stack.setCurrentWidget(self.level_page)
         self._save_selection()
+
+    def open_ai_workspace(self):
+        self.gce_level = ""
+        self.gce_stream = ""
+        self.gce_subject = ""
+        self.gce_system_prompt = ""
+        self.gce_modes = []
+        self.gce_screen = "chat"
+        self.study_context_label.hide()
+        self.mode_bar.hide()
+        self.back_button.hide()
+        self.content_stack.setCurrentWidget(self.chat_page)
+        self._render_messages()
 
     def _restore_gce_selection(self):
         selection = self.progress.get("selection", {})
@@ -1209,31 +1246,169 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _format_message_content(content: str) -> str:
-        pieces = content.split("```")
-        rendered = []
-        for index, piece in enumerate(pieces):
-            if index % 2:
-                code_lines = piece.split("\n", 1)
+        code_fragments: list[tuple[str, str]] = []
+
+        def preserve_code(match: re.Match[str]) -> str:
+            token = match.group(0)
+            placeholder = f"FUSERIOCODETOKEN{len(code_fragments)}END"
+            if token.startswith("```"):
+                code_lines = token[3:-3].split("\n", 1)
                 language = code_lines[0].strip()
                 code = code_lines[1] if len(code_lines) > 1 else code_lines[0]
                 language_label = html.escape(language.upper() or "CODE")
-                rendered.append(
+                rendered_code = (
                     '<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#050d0c" '
                     'border="1" bordercolor="#254239"><tr><td style="padding:8px 12px;">'
                     f'<div style="color:#69d9a8;font-size:9px;">{language_label} / CODE BLOCK</div>'
                     f'<pre style="color:#d8eee3;font-family:monospace;white-space:pre-wrap;">'
                     f'{html.escape(code)}</pre></td></tr></table>'
                 )
-                continue
+            else:
+                rendered_code = (
+                    '<code style="color:#9ee7bf;background-color:#13261f;">'
+                    f'{html.escape(token[1:-1])}</code>'
+                )
+            code_fragments.append((placeholder, rendered_code))
+            return placeholder
 
-            escaped = html.escape(piece).replace("\n", "<br>")
-            escaped = re.sub(
-                r"`([^`]+)`",
-                r'<span style="color:#9ee7bf;background-color:#13261f;">\1</span>',
-                escaped,
+        markdown_source = re.sub(r"```[\s\S]*?```|`[^`\n]*`", preserve_code, content)
+        math_fragments: list[tuple[str, bool]] = []
+        math_pattern = re.compile(
+            r"\\\[[\s\S]*?\\\]|"
+            r"\\\([\s\S]*?\\\)|\$\$[\s\S]*?\$\$|(?<!\\)\$(?!\$)[^\n$]+(?<!\\)\$"
+        )
+
+        def preserve_math(match: re.Match[str]) -> str:
+            token = match.group(0)
+            if token.startswith("\\["):
+                expression, display = token[2:-2], True
+            elif token.startswith("\\("):
+                expression, display = token[2:-2], False
+            elif token.startswith("$$"):
+                expression, display = token[2:-2], True
+            else:
+                expression, display = token[1:-1], False
+            placeholder = f"FUSERIOMATHTOKEN{len(math_fragments)}END"
+            math_fragments.append((placeholder, MainWindow._render_latex(expression, display)))
+            return placeholder
+
+        markdown_source = math_pattern.sub(preserve_math, markdown_source)
+        markdown_source = markdown_source.replace("&", "&amp;")
+        markdown_source = re.sub(
+            r"<(/?[A-Za-z][^<>]*)>",
+            lambda match: f"&lt;{match.group(1)}&gt;",
+            markdown_source,
+        )
+        document = QTextDocument()
+        document.setMarkdown(markdown_source)
+        rendered = document.toHtml()
+        body_match = re.search(r"(?is)<body[^>]*>(.*?)</body>", rendered)
+        body = body_match.group(1) if body_match else rendered
+        for placeholder, math_html in math_fragments:
+            body = body.replace(placeholder, math_html)
+        for placeholder, code_html in code_fragments:
+            body = body.replace(placeholder, code_html)
+        return body
+
+    @staticmethod
+    def _render_latex(expression: str, display: bool = False) -> str:
+        symbols = {
+            "alpha": "α", "beta": "β", "gamma": "γ", "delta": "δ",
+            "epsilon": "ε", "theta": "θ", "lambda": "λ", "mu": "μ",
+            "pi": "π", "rho": "ρ", "sigma": "σ", "phi": "φ",
+            "omega": "ω", "Gamma": "Γ", "Delta": "Δ", "Theta": "Θ",
+            "Lambda": "Λ", "Pi": "Π", "Sigma": "Σ", "Phi": "Φ", "Omega": "Ω",
+            "times": "×", "cdot": "·", "div": "÷", "pm": "±", "mp": "∓",
+            "le": "≤", "leq": "≤", "ge": "≥", "geq": "≥", "ne": "≠",
+            "neq": "≠", "approx": "≈", "infty": "∞", "rightarrow": "→",
+            "to": "→", "pi": "π", "degree": "°", "partial": "∂",
+            "nabla": "∇", "sum": "∑", "prod": "∏", "int": "∫",
+            "sqrt": "√", "therefore": "∴", "because": "∵", "perp": "⊥",
+            "parallel": "∥", "angle": "∠", "Delta": "Δ", "emptyset": "∅",
+        }
+
+        def read_argument(source: str, start: int) -> tuple[str, int]:
+            while start < len(source) and source[start].isspace():
+                start += 1
+            if start >= len(source):
+                return "", start
+            if source[start] != "{":
+                if source[start] == "\\":
+                    command = re.match(r"\\[A-Za-z]+|\\.", source[start:])
+                    if command:
+                        return command.group(0), start + len(command.group(0))
+                return source[start], start + 1
+            depth = 1
+            index = start + 1
+            while index < len(source) and depth:
+                if source[index] == "\\":
+                    index += 2
+                    continue
+                if source[index] == "{":
+                    depth += 1
+                elif source[index] == "}":
+                    depth -= 1
+                index += 1
+            return source[start + 1:index - 1], index
+
+        def render(source: str) -> str:
+            output: list[str] = []
+            index = 0
+            while index < len(source):
+                char = source[index]
+                if char == "\\":
+                    command_match = re.match(r"\\([A-Za-z]+|.)", source[index:])
+                    if not command_match:
+                        output.append("\\")
+                        index += 1
+                        continue
+                    command = command_match.group(1)
+                    index += len(command_match.group(0))
+                    if command in {"frac", "dfrac", "tfrac"}:
+                        numerator, index = read_argument(source, index)
+                        denominator, index = read_argument(source, index)
+                        output.append(
+                            '<span style="white-space:nowrap;vertical-align:middle;">'
+                            f'<sup>{render(numerator)}</sup>⁄<sub>{render(denominator)}</sub></span>'
+                        )
+                    elif command == "sqrt":
+                        radicand, index = read_argument(source, index)
+                        output.append(f'√<span style="text-decoration:overline;">{render(radicand)}</span>')
+                    elif command in {"text", "mathrm", "mathbf", "mathit", "operatorname"}:
+                        text_value, index = read_argument(source, index)
+                        output.append(html.escape(text_value))
+                    elif command == "left" or command == "right":
+                        continue
+                    elif command in symbols:
+                        output.append(symbols[command])
+                    elif command in {"{", "}", "\\", "%", "_", "&"}:
+                        output.append(html.escape(command))
+                    else:
+                        output.append(html.escape(command))
+                    continue
+                if char in {"^", "_"}:
+                    argument, index = read_argument(source, index + 1)
+                    tag = "sup" if char == "^" else "sub"
+                    output.append(f"<{tag}>{render(argument)}</{tag}>")
+                    continue
+                if char in "{}":
+                    index += 1
+                    continue
+                output.append(html.escape(char))
+                index += 1
+            return "".join(output)
+
+        expression_html = render(expression.strip())
+        if display:
+            return (
+                '<span style="color:#d8eee3;background-color:#07120f;'
+                'font-family:serif;font-size:18px;">'
+                f"　{expression_html}　</span>"
             )
-            rendered.append(escaped)
-        return "".join(rendered)
+        return (
+            '<span style="color:#dcf7e9;font-family:serif;font-size:15px;">'
+            f"{expression_html}</span>"
+        )
 
     def closeEvent(self, event):
         self.progress_save_timer.stop()
