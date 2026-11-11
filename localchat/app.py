@@ -466,6 +466,11 @@ class MainWindow(QMainWindow):
         self.progress_save_timer = QTimer(self)
         self.progress_save_timer.setSingleShot(True)
         self.progress_save_timer.timeout.connect(self._save_progress)
+        self.chat_render_timer = QTimer(self)
+        self.chat_render_timer.setSingleShot(True)
+        self.chat_render_timer.setInterval(40)
+        self.chat_render_timer.timeout.connect(self._flush_chat_render)
+        self.chat_render_dirty = False
         self.base_url = ""
         self.api_key = ""
         self.active_model = ""
@@ -1207,8 +1212,15 @@ class MainWindow(QMainWindow):
             return
         self.messages[-1]["reasoning"] += reasoning
         self.messages[-1]["content"] += content
-        self._render_messages()
+        self.chat_render_dirty = True
+        if not self.chat_render_timer.isActive():
+            self.chat_render_timer.start()
         self._schedule_progress_save()
+
+    def _flush_chat_render(self):
+        if self.chat_render_dirty:
+            self.chat_render_dirty = False
+            self._render_messages()
 
     def _chat_error(self, message: str):
         if self.messages and self.messages[-1]["role"] == "assistant":
@@ -1217,6 +1229,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Chat failed: {message}")
 
     def _chat_finished(self):
+        self.chat_render_timer.stop()
+        self._flush_chat_render()
         self.chat_worker = None
         self.send_button.setText("Send")
         self.send_button.setEnabled(bool(self.base_url))

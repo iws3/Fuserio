@@ -150,6 +150,23 @@ def test_model_selector_updates_description_and_load_state(window, monkeypatch):
     assert window.model_reconnect_button.text() == "Connected"
 
 
+def test_stream_chunks_accumulate_before_rich_text_repaint(window, monkeypatch):
+    window.messages = [{"role": "assistant", "content": "", "reasoning": ""}]
+    renders = []
+    monkeypatch.setattr(window, "_render_messages", lambda: renders.append(True))
+
+    window._append_stream_chunk("Checking ", "Answer ")
+    window._append_stream_chunk("the steps.", "is 42.")
+
+    assert window.messages[0]["reasoning"] == "Checking the steps."
+    assert window.messages[0]["content"] == "Answer is 42."
+    assert window.chat_render_timer.isActive()
+    assert renders == []
+
+    window._flush_chat_render()
+    assert renders == [True]
+
+
 def test_greeting_modes_and_typed_questions_use_subject_prompt(window):
     window.select_gce_level("Ordinary Level")
     window.select_gce_stream("Sciences")
