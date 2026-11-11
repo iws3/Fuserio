@@ -150,6 +150,25 @@ def test_model_selector_updates_description_and_load_state(window, monkeypatch):
     assert window.model_reconnect_button.text() == "Connected"
 
 
+def test_selected_model_is_saved(window):
+    window.model_selector.setCurrentIndex(1)
+    assert window.progress["model_id"] == window.model_selector.currentData()
+
+    window._save_progress()
+    assert window.progress["model_id"] == window.model_selector.currentData()
+
+
+def test_saved_model_is_restored_on_startup(qapp, monkeypatch):
+    monkeypatch.setattr(app_module, "ExistingServerProbe", FakeServerProbe)
+    monkeypatch.setattr(app_module, "load_progress", lambda: {"selection": {}, "sessions": {}, "model_id": app_module.MODEL_OPTIONS[1].model_id})
+    monkeypatch.setattr(app_module, "save_progress", lambda _progress: None)
+
+    test_window = app_module.MainWindow()
+
+    assert test_window.model_selector.currentData() == app_module.MODEL_OPTIONS[1].model_id
+    test_window.close()
+
+
 def test_stream_chunks_accumulate_before_rich_text_repaint(window, monkeypatch):
     window.messages = [{"role": "assistant", "content": "", "reasoning": ""}]
     renders = []

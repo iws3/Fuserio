@@ -644,11 +644,11 @@ class MainWindow(QMainWindow):
         self.model_selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         for option in MODEL_OPTIONS:
             self.model_selector.addItem(option.name, option.model_id)
-            self.model_selector.setItemData(
-                self.model_selector.count() - 1,
-                f"{option.description} · {option.quantization}",
-                Qt.ToolTipRole,
-            )
+            self.model_selector.setItemData(self.model_selector.count() - 1, f"{option.description} · {option.quantization}", Qt.ToolTipRole)
+        saved_model_id = self.progress.get("model_id", "")
+        saved_model_index = self.model_selector.findData(saved_model_id)
+        if saved_model_index >= 0:
+            self.model_selector.setCurrentIndex(saved_model_index)
         model_layout.addWidget(self.model_selector)
 
         self.model_detail = QLabel("")
@@ -951,6 +951,8 @@ class MainWindow(QMainWindow):
                 "messages": self.messages,
                 "modes": self.gce_modes,
             }
+        if self.model_selector.currentData():
+            self.progress["model_id"] = self.model_selector.currentData()
         try:
             save_progress(self.progress)
         except OSError as error:
@@ -1008,6 +1010,8 @@ class MainWindow(QMainWindow):
     def _model_selected(self):
         self.generation += 1
         model_id = self.model_selector.currentData()
+        self.progress["model_id"] = model_id
+        self._schedule_progress_save()
         self._update_model_detail()
         self.base_url = ""
         self.api_key = ""
