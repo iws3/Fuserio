@@ -14,12 +14,16 @@ class FakeSignal:
 
 
 class FakeServerProbe:
+    instances = []
+
     def __init__(self, _url):
         self.found = FakeSignal()
         self.failed = FakeSignal()
+        self.started = False
+        self.instances.append(self)
 
     def start(self):
-        pass
+        self.started = True
 
     def isRunning(self):
         return False
@@ -101,6 +105,23 @@ def test_startup_offers_levels_and_sidebar_links_switch_workspaces(window):
     assert window.content_stack.currentWidget() is window.chat_page
     window.gce_study_button.click()
     assert window.content_stack.currentWidget() is window.level_page
+
+
+def test_model_retry_reuses_compatible_server(window):
+    window.model_reconnect_button.setEnabled(True)
+    window.model_reconnect_button.click()
+
+    probe = FakeServerProbe.instances[-1]
+    assert probe.started
+    assert window.model_reconnect_button.text() == "Checking…"
+    probe.found.callback(
+        "http://127.0.0.1:8081",
+        window.model_selector.currentData(),
+    )
+
+    assert window.base_url == "http://127.0.0.1:8081"
+    assert window.connection_status.text() == "READY"
+    assert window.model_reconnect_button.text() == "Connected"
 
 
 def test_greeting_modes_and_typed_questions_use_subject_prompt(window):

@@ -670,7 +670,7 @@ class MainWindow(QMainWindow):
         composer_layout.addWidget(self.send_button)
         self.send_button.clicked.connect(self._send_or_stop)
         self.model_selector.currentIndexChanged.connect(self._model_selected)
-        self.model_reconnect_button.clicked.connect(self._model_selected)
+        self.model_reconnect_button.clicked.connect(self._retry_selected_model)
         layout.addWidget(composer)
 
         self.chat_page = page
@@ -1016,6 +1016,32 @@ class MainWindow(QMainWindow):
             return
         self._prepare_model(model_id, self.generation)
 
+    def _retry_selected_model(self):
+        self.generation += 1
+        self.base_url = ""
+        self.api_key = ""
+        self.active_model = ""
+        self.send_button.setEnabled(False)
+        self.model_reconnect_button.setText("Checking…")
+        self.model_reconnect_button.setEnabled(False)
+        self.connection_status.setText("CONNECTING")
+        self.statusBar().showMessage("Checking for a local model server...")
+        self.retry_probe = ExistingServerProbe("http://127.0.0.1:8081")
+        self.retry_probe.found.connect(self._retry_server_found)
+        self.retry_probe.failed.connect(self._retry_server_missing)
+        self.retry_probe.start()
+
+    def _retry_server_found(self, base_url: str, model_id: str):
+        selected_model = self.model_selector.currentData()
+        if model_id.lower() == selected_model.lower():
+            self.external_server = (base_url, model_id)
+            self._connect_model(base_url, "", model_id, self.generation)
+            return
+        self._start_model(selected_model, self.generation)
+
+    def _retry_server_missing(self):
+        self._start_model(self.model_selector.currentData(), self.generation)
+
     def _existing_server_found(self, base_url: str, model_id: str):
         self.external_server = (base_url, model_id)
         matched_index = next(
@@ -1089,6 +1115,8 @@ class MainWindow(QMainWindow):
         self.pending_model_start = ""
         self.server_output = ""
         self.connection_status.setText("LOADING")
+        self.model_reconnect_button.setText("Loading…")
+        self.model_reconnect_button.setEnabled(False)
         self.statusBar().showMessage("Loading model offline. The window remains responsive.")
         process.start()
 
@@ -1121,6 +1149,8 @@ class MainWindow(QMainWindow):
             self.base_url = ""
             self.send_button.setEnabled(False)
             self.connection_status.setText("OFFLINE")
+            self.model_reconnect_button.setText("Retry")
+            self.model_reconnect_button.setEnabled(True)
             self.statusBar().showMessage("The model server stopped.")
 
     def _server_ready(self, generation: int, base_url: str, api_key: str, model_id: str):
