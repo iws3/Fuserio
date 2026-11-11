@@ -635,6 +635,8 @@ class MainWindow(QMainWindow):
         self.model_selector.setObjectName("modelSelector")
         self.model_selector.setAccessibleName("Choose a local language model")
         self.model_selector.setMinimumWidth(210)
+        self.model_selector.setMinimumContentsLength(18)
+        self.model_selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         for option in MODEL_OPTIONS:
             self.model_selector.addItem(option.name, option.model_id)
             self.model_selector.setItemData(
@@ -646,6 +648,7 @@ class MainWindow(QMainWindow):
 
         self.model_detail = QLabel("")
         self.model_detail.setObjectName("modelDetail")
+        self.model_detail.setAccessibleName("Selected model description and quantization")
         model_layout.addWidget(self.model_detail, 1)
 
         self.model_reconnect_button = QPushButton("Connect")

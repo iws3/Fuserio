@@ -124,6 +124,32 @@ def test_model_retry_reuses_compatible_server(window):
     assert window.model_reconnect_button.text() == "Connected"
 
 
+def test_model_selector_updates_description_and_load_state(window, monkeypatch):
+    requested = []
+    monkeypatch.setattr(
+        window,
+        "_prepare_model",
+        lambda model_id, generation: requested.append((model_id, generation)),
+    )
+
+    window.model_selector.setCurrentIndex(1)
+
+    assert requested[-1][0] == window.model_selector.currentData()
+    assert "general assistant" in window.model_detail.text()
+    assert "3B" in window.model_detail.text()
+    assert window.model_reconnect_button.text() == "Loading…"
+    assert not window.model_reconnect_button.isEnabled()
+
+    window._connect_model(
+        "http://127.0.0.1:8081",
+        "",
+        window.model_selector.currentData(),
+        window.generation,
+    )
+    assert window.connection_status.text() == "READY"
+    assert window.model_reconnect_button.text() == "Connected"
+
+
 def test_greeting_modes_and_typed_questions_use_subject_prompt(window):
     window.select_gce_level("Ordinary Level")
     window.select_gce_stream("Sciences")
