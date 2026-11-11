@@ -1216,6 +1216,8 @@ class MainWindow(QMainWindow):
             return
         self.messages[-1]["reasoning"] += reasoning
         self.messages[-1]["content"] += content
+        if content:
+            self.messages[-1]["stream_chunks"] = self.messages[-1].get("stream_chunks", 0) + 1
         self.chat_render_dirty = True
         if not self.chat_render_timer.isActive():
             self.chat_render_timer.start()
@@ -1318,7 +1320,8 @@ class MainWindow(QMainWindow):
             elif is_streaming:
                 content += '<span style="color:#65efb9;">▋</span>'
             generating_badge = (
-                '<span style="color:#70f2b7;">· GENERATING</span>'
+                f'<span style="color:#70f2b7;">· GENERATING · '
+                f'{message.get("stream_chunks", 0)} TOKENS</span>'
                 if is_streaming
                 else ""
             )
@@ -1371,6 +1374,7 @@ class MainWindow(QMainWindow):
             return
         if self.messages and self.messages[-1]["role"] == "assistant":
             self.messages[-1]["streaming"] = True
+            self.messages[-1]["stream_chunks"] = 0
             self._render_messages()
         self.send_button.setText("Stop")
         self.send_button.setEnabled(True)

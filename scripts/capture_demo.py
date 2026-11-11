@@ -108,6 +108,7 @@ def capture_frames(frame_directory: Path) -> list[Path]:
     )
     for token_index, partial in enumerate(progressive_reveals(answer)):
         window.messages[-1]["content"] = partial
+        window.messages[-1]["stream_chunks"] = token_index + 1
         window._render_messages()
         capture(f"05-token-{token_index:03d}")
 

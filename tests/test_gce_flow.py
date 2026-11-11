@@ -170,7 +170,7 @@ def test_saved_model_is_restored_on_startup(qapp, monkeypatch):
 
 
 def test_stream_chunks_accumulate_before_rich_text_repaint(window, monkeypatch):
-    window.messages = [{"role": "assistant", "content": "", "reasoning": ""}]
+    window.messages = [{"role": "assistant", "content": "", "reasoning": "", "streaming": True}]
     renders = []
     monkeypatch.setattr(window, "_render_messages", lambda: renders.append(True))
 
@@ -179,11 +179,26 @@ def test_stream_chunks_accumulate_before_rich_text_repaint(window, monkeypatch):
 
     assert window.messages[0]["reasoning"] == "Checking the steps."
     assert window.messages[0]["content"] == "Answer is 42."
+    assert window.messages[0]["stream_chunks"] == 2
     assert window.chat_render_timer.isActive()
     assert renders == []
 
     window._flush_chat_render()
     assert renders == [True]
+
+
+def test_live_generation_badge_includes_answer_chunk_count(window):
+    window.messages = [{
+        "role": "assistant",
+        "content": "Speed is 60 km/h.",
+        "reasoning": "",
+        "streaming": True,
+        "stream_chunks": 7,
+    }]
+
+    window._render_messages()
+
+    assert "GENERATING · 7 TOKENS" in window.chat_view.toHtml()
 
 
 def test_assistant_shows_generating_indicator_until_worker_finishes(window):
