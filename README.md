@@ -6,7 +6,7 @@
 
 [Download the MP4 version](assets/fuserio-demo.mp4)
 
-The demo shows the GCE flow and a Physics answer being generated progressively in the chat. It uses sample messages and does not need or start an AI model.
+The demo shows the GCE flow and a Physics answer being generated progressively in the chat, with a live token counter. It uses sample messages and does not need or start an AI model.
 
 ## Get Started
 
