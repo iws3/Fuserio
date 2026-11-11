@@ -2,11 +2,11 @@
 
 **Your private local AI workspace and Cameroon GCE study tutor.** Fuserio runs as a desktop app and connects to llama.cpp on your computer.
 
-![Fuserio walkthrough: choose a GCE level, stream, subject, and see a worked Physics answer](assets/fuserio-demo.gif)
+![Animated Fuserio walkthrough: choose a GCE level, stream, and subject, then watch a worked Physics answer appear token by token](assets/fuserio-demo.gif)
 
 [Download the MP4 version](assets/fuserio-demo.mp4)
 
-The demo uses sample messages. It does not need or start an AI model.
+The demo shows the GCE flow and a Physics answer being generated progressively in the chat. It uses sample messages and does not need or start an AI model.
 
 ## Get Started
 
@@ -36,7 +36,7 @@ The first screen lets you choose **Ordinary Level** or **Advanced Level**. Use *
 
 ## Chat With a Local Model
 
-Choose a model from the selector beside the chat composer. Fuserio can start a model that is already cached for llama.cpp. To start one of the configured local servers yourself, use a separate terminal:
+Use the **Local Model** bar above the composer to choose a model. Each option shows its purpose, parameter size, and quantization. The connection control changes to **Connected**, **Loading**, or **Retry** as needed; Retry checks for a compatible server before starting another copy. Fuserio can start a model that is already cached for llama.cpp. To start one of the configured local servers yourself, use a separate terminal:
 
 ```bash
 ./start-nemotron.sh
@@ -82,7 +82,7 @@ sudo apt install ffmpeg
 .venv/bin/python scripts/capture_demo.py
 ```
 
-The script captures the app's real screens with sample content, crossfades between them, and writes `assets/fuserio-demo.gif` and `assets/fuserio-demo.mp4`. It does not connect to a model or include personal chat history.
+The script captures the app's real screens with sample content, crossfades between them, and reveals the sample tutor answer progressively. It writes `assets/fuserio-demo.gif` and `assets/fuserio-demo.mp4`. It does not connect to a model or include personal chat history.
 
 ## Troubleshooting
 
