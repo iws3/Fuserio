@@ -39,12 +39,7 @@ from localchat.gce import (
     save_progress,
     suggested_topic_areas,
 )
-
-
-MODEL_OPTIONS = (
-    ("Nemotron 3 Nano 4B", "nvidia/NVIDIA-Nemotron-3-Nano-4B-GGUF:Q4_K_M"),
-    ("Qwen 2.5 Instruct 3B", "bartowski/Qwen2.5-3B-Instruct-GGUF:Q4_K_M"),
-)
+from localchat.models import MODEL_OPTIONS, model_option
 
 
 def build_stylesheet() -> str:
@@ -229,6 +224,39 @@ def build_stylesheet() -> str:
         color: #d8fff4;
         padding: 12px 30px 12px 12px;
         min-width: 190px;
+    }
+
+    #modelBar {
+        background: rgba(5, 24, 21, 0.72);
+        border: 1px solid rgba(64, 208, 176, 0.22);
+        border-radius: 10px;
+        padding: 6px 10px;
+    }
+
+    #modelEyebrow {
+        color: #70bea3;
+        font-size: 9px;
+        font-weight: 800;
+    }
+
+    #modelDetail {
+        color: #90b8a7;
+        font-size: 10px;
+    }
+
+    #modelReconnectButton {
+        background: rgba(11, 48, 39, 0.9);
+        border: 1px solid rgba(83, 200, 171, 0.36);
+        border-radius: 8px;
+        color: #b7efd9;
+        padding: 8px 11px;
+        font-size: 10px;
+        font-weight: 700;
+    }
+
+    #modelReconnectButton:hover {
+        background: rgba(16, 68, 53, 0.96);
+        border-color: #69efb5;
     }
 
     QComboBox::drop-down {
@@ -593,6 +621,40 @@ class MainWindow(QMainWindow):
         self.mode_bar.hide()
         layout.addWidget(self.mode_bar)
 
+        model_bar = QWidget()
+        model_bar.setObjectName("modelBar")
+        model_layout = QHBoxLayout(model_bar)
+        model_layout.setContentsMargins(8, 4, 8, 4)
+        model_layout.setSpacing(10)
+
+        model_eyebrow = QLabel("LOCAL MODEL")
+        model_eyebrow.setObjectName("modelEyebrow")
+        model_layout.addWidget(model_eyebrow)
+
+        self.model_selector = QComboBox()
+        self.model_selector.setObjectName("modelSelector")
+        self.model_selector.setAccessibleName("Choose a local language model")
+        self.model_selector.setMinimumWidth(210)
+        for option in MODEL_OPTIONS:
+            self.model_selector.addItem(option.name, option.model_id)
+            self.model_selector.setItemData(
+                self.model_selector.count() - 1,
+                f"{option.description} · {option.quantization}",
+                Qt.ToolTipRole,
+            )
+        model_layout.addWidget(self.model_selector)
+
+        self.model_detail = QLabel("")
+        self.model_detail.setObjectName("modelDetail")
+        model_layout.addWidget(self.model_detail, 1)
+
+        self.model_reconnect_button = QPushButton("Connect")
+        self.model_reconnect_button.setObjectName("modelReconnectButton")
+        self.model_reconnect_button.setToolTip("Connect or restart the selected local model")
+        model_layout.addWidget(self.model_reconnect_button)
+        self._update_model_detail()
+        layout.addWidget(model_bar)
+
         composer = QWidget()
         composer_layout = QHBoxLayout(composer)
         composer_layout.setContentsMargins(0, 0, 0, 0)
@@ -602,18 +664,13 @@ class MainWindow(QMainWindow):
         self.input.setObjectName("composer")
         composer_layout.addWidget(self.input, 1)
 
-        self.model_selector = QComboBox()
-        self.model_selector.setObjectName("modelSelector")
-        for label, model_id in MODEL_OPTIONS:
-            self.model_selector.addItem(label, model_id)
-        composer_layout.addWidget(self.model_selector)
-
         self.send_button = QPushButton("Send")
         self.send_button.setObjectName("sendButton")
         self.send_button.setEnabled(False)
         composer_layout.addWidget(self.send_button)
         self.send_button.clicked.connect(self._send_or_stop)
         self.model_selector.currentIndexChanged.connect(self._model_selected)
+        self.model_reconnect_button.clicked.connect(self._model_selected)
         layout.addWidget(composer)
 
         self.chat_page = page
@@ -943,10 +1000,13 @@ class MainWindow(QMainWindow):
     def _model_selected(self):
         self.generation += 1
         model_id = self.model_selector.currentData()
+        self._update_model_detail()
         self.base_url = ""
         self.api_key = ""
         self.active_model = ""
         self.send_button.setEnabled(False)
+        self.model_reconnect_button.setText("Loading…")
+        self.model_reconnect_button.setEnabled(False)
         self.connection_status.setText("LOADING")
         self.model_info.setText(f"Model: {self.model_selector.currentText()}")
         self.statusBar().showMessage("Loading selected local model...")
@@ -1072,11 +1132,13 @@ class MainWindow(QMainWindow):
         self.base_url = base_url
         self.api_key = api_key
         self.active_model = model_id
-        label = next(
-            (name for name, value in MODEL_OPTIONS if value.lower() == model_id.lower()),
-            model_id,
-        )
+        option = model_option(model_id)
+        label = option.name if option else model_id
         self.model_info.setText(f"Model: {label}")
+        if option:
+            self.model_detail.setText(f"{option.description}  ·  {option.quantization}  ·  local only")
+        self.model_reconnect_button.setText("Connected")
+        self.model_reconnect_button.setEnabled(False)
         self.connection_status.setText("READY")
         self.send_button.setEnabled(True)
         self.statusBar().showMessage("Local model ready. Your messages stay on this computer.")
@@ -1096,7 +1158,16 @@ class MainWindow(QMainWindow):
         self.base_url = ""
         self.connection_status.setText("ERROR")
         self.send_button.setEnabled(False)
+        self.model_reconnect_button.setText("Retry")
+        self.model_reconnect_button.setEnabled(True)
         self.statusBar().showMessage(message + (f" Check llama-server output: {detail}" if detail else ""))
+
+    def _update_model_detail(self):
+        option = model_option(self.model_selector.currentData() or "")
+        if option:
+            self.model_detail.setText(f"{option.description}  ·  {option.quantization}  ·  local only")
+        else:
+            self.model_detail.setText("Local model")
 
     def _append_stream_chunk(self, reasoning: str, content: str):
         if not self.messages:
