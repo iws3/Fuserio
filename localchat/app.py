@@ -1231,6 +1231,9 @@ class MainWindow(QMainWindow):
     def _chat_finished(self):
         self.chat_render_timer.stop()
         self._flush_chat_render()
+        if self.messages and self.messages[-1]["role"] == "assistant":
+            self.messages[-1]["streaming"] = False
+            self._render_messages()
         self.chat_worker = None
         self.send_button.setText("Send")
         self.send_button.setEnabled(bool(self.base_url))
@@ -1290,6 +1293,7 @@ class MainWindow(QMainWindow):
                 continue
 
             reasoning = self._format_message_content(message.get("reasoning", ""))
+            is_streaming = bool(message.get("streaming"))
             if reasoning:
                 reasoning_panel = (
                     '<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#071513" '
@@ -1307,6 +1311,13 @@ class MainWindow(QMainWindow):
             if not content:
                 content = '<span style="color:#65efb9;">▋</span> '
                 '<span style="color:#719087;">WAITING FOR MODEL TOKENS</span>'
+            elif is_streaming:
+                content += '<span style="color:#65efb9;">▋</span>'
+            generating_badge = (
+                '<span style="color:#70f2b7;">· GENERATING</span>'
+                if is_streaming
+                else ""
+            )
 
             document.append(
                 '<table width="100%" cellspacing="0" cellpadding="0"><tr><td>'
@@ -1316,7 +1327,8 @@ class MainWindow(QMainWindow):
                 '<td style="padding:15px 19px;">'
                 '<table width="100%" cellspacing="0" cellpadding="0"><tr>'
                 '<td><span style="color:#70f2b7;font-weight:bold;">FUSERIO</span> '
-                '<span style="color:#5c8375;">/ LOCAL INTELLIGENCE</span></td>'
+                '<span style="color:#5c8375;">/ LOCAL INTELLIGENCE</span> '
+                f'{generating_badge}</td>'
                 f'<td align="right" style="color:#5e8878;font-size:10px;">{turn_label} · INBOUND</td>'
                 f'</tr></table><br>{reasoning_panel}'
                 f'<div style="color:#e5f5ec;line-height:1.6;">{content}</div>'
@@ -1353,6 +1365,9 @@ class MainWindow(QMainWindow):
         if not self.base_url:
             self.statusBar().showMessage("Connect a local model before chatting.")
             return
+        if self.messages and self.messages[-1]["role"] == "assistant":
+            self.messages[-1]["streaming"] = True
+            self._render_messages()
         self.send_button.setText("Stop")
         self.send_button.setEnabled(True)
         self.statusBar().showMessage("Generating locally...")

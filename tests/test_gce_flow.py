@@ -167,6 +167,18 @@ def test_stream_chunks_accumulate_before_rich_text_repaint(window, monkeypatch):
     assert renders == [True]
 
 
+def test_assistant_shows_generating_indicator_until_worker_finishes(window):
+    window.messages = [{"role": "assistant", "content": "", "reasoning": ""}]
+
+    window._start_chat_request([{"role": "user", "content": "hello"}])
+
+    assert window.messages[-1]["streaming"] is True
+    assert "GENERATING" in window.chat_view.toHtml()
+    window._chat_finished()
+    assert window.messages[-1]["streaming"] is False
+    assert "GENERATING" not in window.chat_view.toHtml()
+
+
 def test_greeting_modes_and_typed_questions_use_subject_prompt(window):
     window.select_gce_level("Ordinary Level")
     window.select_gce_stream("Sciences")
