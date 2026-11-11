@@ -22,6 +22,7 @@ ASSETS = ROOT / "assets"
 FPS = 15
 CLIP_SECONDS = 1.8
 FADE_SECONDS = 0.4
+TOKEN_INTERVAL = 0.13
 
 
 class QuietSignal:
@@ -42,6 +43,15 @@ class QuietServerProbe:
 
     def isRunning(self):
         return False
+
+
+def progressive_reveals(text: str) -> list[str]:
+    revealed = []
+    current = ""
+    for token in text.split(" "):
+        current += (" " if current else "") + token
+        revealed.append(current)
+    return revealed
 
 
 def capture_frames(frame_directory: Path) -> list[Path]:
@@ -73,6 +83,7 @@ def capture_frames(frame_directory: Path) -> list[Path]:
     window.select_gce_stream("Sciences")
     capture("03-subject")
     window.open_gce_subject("Physics")
+    window.statusBar().showMessage("Sample tutor · answer streaming locally")
     window.messages = [
         {
             "role": "user",
@@ -81,15 +92,26 @@ def capture_frames(frame_directory: Path) -> list[Path]:
         {
             "role": "assistant",
             "reasoning": "Identify distance and time, then apply average speed = distance / time.",
-            "content": (
-                "**Given:** distance $d = 120\\,\\text{km}$ and time $t = 2\\,\\text{h}$.\n\n"
-                "Use the formula $v = \\frac{d}{t}$.\n\n"
-                "$$v = \\frac{120}{2} = 60\\,\\text{km/h}$$\n\n"
-                "**Answer:** The average speed is **60 km/h**."
-            ),
+            "content": "",
+            "streaming": True,
         },
     ]
     window.mode_bar.show()
+    window._render_messages()
+    capture("04-tutor-thinking")
+
+    answer = (
+        "**Given:** distance $d = 120\\,\\text{km}$ and time $t = 2\\,\\text{h}$.\n\n"
+        "Use the formula $v = \\frac{d}{t}$.\n\n"
+        "$$v = \\frac{120}{2} = 60\\,\\text{km/h}$$\n\n"
+        "**Answer:** The average speed is **60 km/h**."
+    )
+    for token_index, partial in enumerate(progressive_reveals(answer)):
+        window.messages[-1]["content"] = partial
+        window._render_messages()
+        capture(f"05-token-{token_index:03d}")
+
+    window.messages[-1]["streaming"] = False
     window._render_messages()
     capture("04-tutor-chat")
     window.close()
@@ -97,13 +119,18 @@ def capture_frames(frame_directory: Path) -> list[Path]:
     return frames
 
 
-def encode_video(frames: list[Path], video_path: Path) -> None:
+def encode_still_sequence(
+    frames: list[Path],
+    video_path: Path,
+    clip_seconds: float,
+    fade_seconds: float,
+) -> None:
     inputs: list[str] = []
     for frame_path in frames:
         inputs.extend(
             [
                 "-loop", "1", "-framerate", str(FPS),
-                "-t", str(CLIP_SECONDS), "-i", str(frame_path),
+                "-t", str(clip_seconds), "-i", str(frame_path),
             ]
         )
 
@@ -115,16 +142,16 @@ def encode_video(frames: list[Path], video_path: Path) -> None:
         )
 
     current = "v0"
-    current_duration = CLIP_SECONDS
+    current_duration = clip_seconds
     for index in range(1, len(frames)):
         output_label = f"mix{index}"
-        offset = current_duration - FADE_SECONDS
+        offset = current_duration - fade_seconds
         filters.append(
-            f"[{current}][v{index}]xfade=transition=fade:duration={FADE_SECONDS}:"
+            f"[{current}][v{index}]xfade=transition=fade:duration={fade_seconds}:"
             f"offset={offset:.3f}[{output_label}]"
         )
         current = output_label
-        current_duration += CLIP_SECONDS - FADE_SECONDS
+        current_duration += clip_seconds - fade_seconds
     filters.append(f"[{current}]format=yuv420p[out]")
 
     command = [
@@ -136,6 +163,52 @@ def encode_video(frames: list[Path], video_path: Path) -> None:
         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(video_path),
     ]
     subprocess.run(command, check=True)
+
+
+def encode_video(frames: list[Path], video_path: Path) -> None:
+    if len(frames) < 5:
+        encode_still_sequence(frames, video_path, CLIP_SECONDS, FADE_SECONDS)
+        return
+
+    scene_frames = frames[:4]
+    token_frames = frames[4:]
+    with tempfile.TemporaryDirectory(prefix="fuserio-demo-encode-") as temporary_directory:
+        temporary_path = Path(temporary_directory)
+        scenes_path = temporary_path / "scenes.mp4"
+        tokens_path = temporary_path / "tokens.mp4"
+        encode_still_sequence(scene_frames, scenes_path, CLIP_SECONDS, FADE_SECONDS)
+
+        concat_path = temporary_path / "tokens.txt"
+        with concat_path.open("w", encoding="utf-8") as concat_file:
+            for frame_path in token_frames:
+                concat_file.write(f"file '{frame_path.as_posix()}'\n")
+                concat_file.write(f"duration {TOKEN_INTERVAL}\n")
+            concat_file.write(f"file '{token_frames[-1].as_posix()}'\n")
+        subprocess.run(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                "-f", "concat", "-safe", "0", "-i", str(concat_path),
+                "-vf", f"scale=1280:-2:flags=lanczos,setsar=1,fps={FPS},format=yuv420p",
+                "-c:v", "libx264", "-crf", "21", "-preset", "medium",
+                "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(tokens_path),
+            ],
+            check=True,
+        )
+
+        scene_duration = len(scene_frames) * CLIP_SECONDS - (len(scene_frames) - 1) * FADE_SECONDS
+        subprocess.run(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                "-i", str(scenes_path), "-i", str(tokens_path),
+                "-filter_complex",
+                f"[0:v][1:v]xfade=transition=fade:duration={FADE_SECONDS}:"
+                f"offset={scene_duration - FADE_SECONDS:.3f},format=yuv420p[out]",
+                "-map", "[out]", "-an", "-r", str(FPS),
+                "-c:v", "libx264", "-crf", "21", "-preset", "medium",
+                "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(video_path),
+            ],
+            check=True,
+        )
 
 
 def encode_gif(video_path: Path, gif_path: Path) -> None:
