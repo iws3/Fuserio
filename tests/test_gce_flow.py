@@ -124,6 +124,120 @@ def test_model_retry_reuses_compatible_server(window):
     assert window.model_reconnect_button.text() == "Connected"
 
 
+def test_experiment_sidebar_opens_subject_gallery_and_live_simulation(window):
+    from PySide6.QtWidgets import QPushButton, QSlider
+
+    window.lab_subject_buttons["Physics"].click()
+
+    assert window.active_workspace == "experiments"
+    assert window.lab_subject == "Physics"
+    assert window.content_stack.currentWidget() is window.lab_gallery_page
+    assert window.lab_gallery_grid.count() == 3
+
+    first_experiment = window.lab_gallery_grid.itemAt(0).widget()
+    assert isinstance(first_experiment, QPushButton)
+    first_experiment.click()
+    assert window.content_stack.currentWidget() is window.lab_detail_page
+    assert window.lab_canvas.experiment.identifier == "projectile-motion"
+    assert window.lab_metric_labels
+    assert "u" in window.lab_equation.toPlainText()
+    assert "air resistance" in window.lab_model_note.text().lower()
+
+    initial_range = window.lab_canvas.measurements()["RANGE"]
+    speed_slider = next(
+        slider for slider in window.lab_controls_widget.findChildren(QSlider)
+        if slider.accessibleName() == "Launch speed"
+    )
+    speed_slider.setValue(35)
+    assert window.lab_canvas.measurements()["RANGE"] != initial_range
+
+    initial_time = window.lab_canvas.elapsed
+    window.lab_step_button.click()
+    assert window.lab_canvas.elapsed > initial_time
+    window.lab_speed_slider.setValue(150)
+    assert window.lab_canvas.playback_rate == 1.5
+    assert window.lab_speed_value.text() == "1.50×"
+
+    window.navigate_back()
+    assert window.content_stack.currentWidget() is window.lab_gallery_page
+    window.navigate_back()
+    assert window.content_stack.currentWidget() is window.lab_home_page
+
+
+def test_experiment_workspace_clears_previous_gce_tutor_context(window):
+    window.gce_subject = "Physics"
+    window.gce_system_prompt = "O Level GCE physics instructions"
+    window.gce_modes = [{"mode": "Practice", "time": 1}]
+
+    window.open_experiments_subject("Chemistry")
+
+    assert window.gce_subject == ""
+    assert window.gce_system_prompt == ""
+    assert window.gce_modes == []
+
+
+def test_biology_and_chemistry_sidebar_subjects_open_their_own_catalogs(window):
+    from PySide6.QtWidgets import QApplication
+
+    window.lab_subject_buttons["Biology"].click()
+    biology_titles = {
+        window.lab_gallery_grid.itemAt(index).widget().text().split("\n", 1)[0]
+        for index in range(window.lab_gallery_grid.count())
+    }
+    assert biology_titles == {"Membrane diffusion", "Enzyme activity", "Natural selection"}
+    biology_cards = [
+        window.lab_gallery_grid.itemAt(index).widget()
+        for index in range(window.lab_gallery_grid.count())
+    ]
+
+    window.lab_subject_buttons["Chemistry"].click()
+    QApplication.processEvents()
+    chemistry_titles = {
+        window.lab_gallery_grid.itemAt(index).widget().text().split("\n", 1)[0]
+        for index in range(window.lab_gallery_grid.count())
+    }
+    assert chemistry_titles == {"Reaction rate", "Acid-base titration", "States of matter"}
+    assert all(not card.isVisible() for card in biology_cards)
+
+
+def test_experiment_tutor_receives_subject_readings_and_safety_context(window):
+    window.open_experiments_subject("Physics")
+    experiment_button = window.lab_gallery_grid.itemAt(0).widget()
+    experiment_button.click()
+    readings = window.lab_canvas.measurements()
+
+    window.ask_lab_tutor()
+
+    tutor_request = FakeChatWorker.instances[-1].messages
+    system_prompt = tutor_request[0]["content"]
+    assert tutor_request[0]["role"] == "system"
+    assert "Physics" in system_prompt
+    assert "Projectile motion" in system_prompt
+    assert "Safety boundary" in system_prompt
+    assert readings["RANGE"] in tutor_request[-1]["content"]
+    assert window.active_workspace == "experiments"
+    assert window.lab_screen == "tutor"
+    window.navigate_back()
+    assert window.content_stack.currentWidget() is window.lab_detail_page
+
+
+def test_experiment_predictions_and_observations_restore_per_experiment(window):
+    window.open_experiments_subject("Physics")
+    window.lab_gallery_grid.itemAt(0).widget().click()
+    window.lab_prediction_edit.setPlainText("A larger launch angle should increase the apex.")
+    window.lab_observation_edit.setPlainText("At 60 degrees the height increased, but range changed too.")
+    window._save_lab_notes()
+
+    saved = window.progress["experiments"]["projectile-motion"]
+    assert saved["prediction"].startswith("A larger launch angle")
+    assert saved["observation"].startswith("At 60 degrees")
+
+    window.navigate_back()
+    window.open_experiment("projectile-motion")
+    assert window.lab_prediction_edit.toPlainText() == saved["prediction"]
+    assert window.lab_observation_edit.toPlainText() == saved["observation"]
+
+
 def test_model_selector_updates_description_and_load_state(window, monkeypatch):
     requested = []
     monkeypatch.setattr(

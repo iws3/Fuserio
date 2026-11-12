@@ -37,6 +37,18 @@ def test_latex_supports_roots_greek_and_subscripts():
     assert r"\sqrt" not in rendered
 
 
+def test_science_trigonometry_and_proportionality_render_as_symbols():
+    QApplication.instance() or QApplication([])
+
+    rendered = MainWindow._format_message_content(r"$u\cos\theta \propto \sin\alpha$")
+
+    assert "cos" in rendered
+    assert "θ" in rendered
+    assert "∝" in rendered
+    assert "sin" in rendered
+    assert "α" in rendered
+
+
 def test_markdown_keeps_code_blocks_and_escapes_html():
     QApplication.instance() or QApplication([])
 

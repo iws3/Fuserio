@@ -2,11 +2,11 @@
 
 **Your private local AI workspace and Cameroon GCE study tutor.** Fuserio runs as a desktop app and connects to llama.cpp on your computer.
 
-![Animated Fuserio walkthrough: choose a GCE level, stream, and subject, then watch a worked Physics answer appear token by token](assets/fuserio-demo.gif)
+![Animated Fuserio walkthrough: choose a GCE level, see a Physics tutor answer stream, and play a projectile-motion lab](assets/fuserio-demo.gif)
 
 [Download the MP4 version](assets/fuserio-demo.mp4)
 
-The demo shows the GCE flow and a Physics answer being generated progressively in the chat, with a live token counter. It uses sample messages and does not need or start an AI model.
+The demo shows the GCE flow, a Physics answer being generated progressively with a live token counter, and a running projectile-motion experiment. It uses sample content and does not need or start an AI model.
 
 ## Get Started
 
@@ -49,6 +49,28 @@ Or:
 ```
 
 Leave that terminal running, then open Fuserio. The app detects a compatible server on `127.0.0.1:8081`. The model files must already be present locally; Fuserio does not download models.
+
+### Add DeepSeek R1 Distill Qwen 1.5B
+
+This compact Q4 model is a practical first DeepSeek option for a CPU laptop. Downloading it requires an internet connection and about 1.1 GB of data. Run this once in a terminal; it starts a short test prompt and lets llama.cpp cache the model:
+
+```bash
+cd ~/llama.cpp
+./build/bin/llama-cli \
+	-hf bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF:Q4_K_M \
+	-p "Explain Newton's second law in one sentence." \
+	-n 80
+```
+
+Wait for the prompt to finish so the model is cached. Then select **DeepSeek R1 Distill Qwen** in Fuserio's Local Model bar. Fuserio does not start the download automatically; after it is cached, the app can start it offline.
+
+## Interactive Science Lab
+
+Choose Physics, Biology, or Chemistry in the **Interactive Lab** section of the sidebar. Each subject has three virtual pre-labs, including projectile motion, a pendulum, an Ohm's law circuit, membrane diffusion, enzyme activity, natural selection, reaction rates, titration, and states of matter.
+
+Open an experiment to change its controls, run or pause the animation, adjust playback speed, or advance one step at a time. Live readings update as parameters change. Each lab shows its model equation, assumptions, and a safety note. Use the prediction and observation fields as a short lab notebook; notes are saved locally and restored when you reopen the experiment. **Ask Fuserio** sends the selected simulation and current readings to the local model for an explanation.
+
+These are simplified computer models to explore ideas before a practical lesson. They do not replace teacher supervision, real laboratory safety rules, or official practical instructions. The sidebar retains direct access to GCE Learning and the general AI Workspace.
 
 ## GCE Study
 
@@ -94,6 +116,7 @@ The script captures the app's real screens with sample content, crossfades betwe
 ## Project Files
 
 - `localchat/` contains the desktop UI, local chat client, and GCE tutor flow.
+- `localchat/lab_data.py` and `localchat/lab_widgets.py` contain the experiment catalog and offline simulations.
 - `assets/fus-fuserio.png` is the app logo; `fus.png` is the supplied source artwork.
 - `scripts/capture_demo.py` rebuilds the README demo.
 - `tests/` contains the GCE flow and formatted math regression tests.
