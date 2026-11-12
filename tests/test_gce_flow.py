@@ -178,6 +178,27 @@ def test_biology_and_chemistry_sidebar_subjects_open_their_own_catalogs(window):
     assert chemistry_titles == {"Reaction rate", "Acid-base titration", "States of matter"}
 
 
+def test_experiment_tutor_receives_subject_readings_and_safety_context(window):
+    window.open_experiments_subject("Physics")
+    experiment_button = window.lab_gallery_grid.itemAt(0).widget()
+    experiment_button.click()
+    readings = window.lab_canvas.measurements()
+
+    window.ask_lab_tutor()
+
+    tutor_request = FakeChatWorker.instances[-1].messages
+    system_prompt = tutor_request[0]["content"]
+    assert tutor_request[0]["role"] == "system"
+    assert "Physics" in system_prompt
+    assert "Projectile motion" in system_prompt
+    assert "Safety boundary" in system_prompt
+    assert readings["RANGE"] in tutor_request[-1]["content"]
+    assert window.active_workspace == "experiments"
+    assert window.lab_screen == "tutor"
+    window.navigate_back()
+    assert window.content_stack.currentWidget() is window.lab_detail_page
+
+
 def test_model_selector_updates_description_and_load_state(window, monkeypatch):
     requested = []
     monkeypatch.setattr(

@@ -931,6 +931,11 @@ class MainWindow(QMainWindow):
         self.lab_reset_button.setObjectName("studyModeButton")
         self.lab_reset_button.clicked.connect(self._reset_lab_simulation)
         toolbar_layout.addWidget(self.lab_reset_button)
+        self.lab_tutor_button = QPushButton("Ask Fuserio")
+        self.lab_tutor_button.setObjectName("studyModeButton")
+        self.lab_tutor_button.setToolTip("Ask the local AI tutor to explain this model and its current results")
+        self.lab_tutor_button.clicked.connect(self.ask_lab_tutor)
+        toolbar_layout.addWidget(self.lab_tutor_button)
         self.lab_step_button = QPushButton("Step →")
         self.lab_step_button.setObjectName("studyModeButton")
         self.lab_step_button.clicked.connect(self._step_lab_simulation)
@@ -1094,6 +1099,48 @@ class MainWindow(QMainWindow):
         self.lab_canvas.reset()
         self.lab_play_button.setText("▶  Run simulation")
         self._update_lab_metrics()
+
+    def ask_lab_tutor(self):
+        experiment = self.active_experiment
+        if not experiment:
+            return
+        if not self.base_url:
+            self.statusBar().showMessage("Connect a local model before asking the tutor about this experiment.")
+            return
+        current_readings = "; ".join(
+            f"{name}: {value}" for name, value in self.lab_canvas.measurements().items()
+        )
+        self.gce_system_prompt = "\n".join(
+            (
+                "You are a clear science tutor explaining a simplified interactive pre-lab model.",
+                f"The selected subject is {experiment.subject}; the experiment is {experiment.title}.",
+                f"Learning objective: {experiment.objective}",
+                f"Safety boundary: {experiment.safety}",
+                "Explain the science and what the displayed measurements mean. State when the simulation "
+                "omits real-world effects. Do not instruct the student to perform hazardous procedures "
+                "without appropriate teacher supervision and safety equipment.",
+                "Use short, step-by-step language and invite the student to predict what happens when "
+                "they change one control.",
+            )
+        )
+        question = f"Explain this model and interpret its current readings: {current_readings}."
+        self.messages = [
+            {"role": "user", "content": f"Explain {experiment.title} and its current readings."},
+            {"role": "assistant", "content": "", "reasoning": ""},
+        ]
+        self.study_context_label.setText(
+            f"PRE-LAB TUTOR  /  {experiment.subject.upper()}  /  {experiment.title.upper()}"
+        )
+        self.study_context_label.show()
+        self.mode_bar.hide()
+        self.active_workspace = "experiments"
+        self.lab_screen = "tutor"
+        self.content_stack.setCurrentWidget(self.chat_page)
+        self._render_messages()
+        self._start_chat_request([
+            {"role": "system", "content": self.gce_system_prompt},
+            {"role": "user", "content": question},
+        ])
 
     def _step_lab_simulation(self):
         self.lab_canvas.step()
@@ -1269,7 +1316,11 @@ class MainWindow(QMainWindow):
 
     def navigate_back(self):
         if self.active_workspace == "experiments":
-            if self.lab_screen == "detail":
+            if self.lab_screen == "tutor":
+                self.lab_screen = "detail"
+                self.study_context_label.hide()
+                self.content_stack.setCurrentWidget(self.lab_detail_page)
+            elif self.lab_screen == "detail":
                 self.lab_screen = "gallery"
                 self.content_stack.setCurrentWidget(self.lab_gallery_page)
             elif self.lab_screen == "gallery":
