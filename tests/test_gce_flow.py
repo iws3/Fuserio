@@ -124,6 +124,53 @@ def test_model_retry_reuses_compatible_server(window):
     assert window.model_reconnect_button.text() == "Connected"
 
 
+def test_experiment_sidebar_opens_subject_gallery_and_live_simulation(window):
+    from PySide6.QtWidgets import QPushButton, QSlider
+
+    window.lab_subject_buttons["Physics"].click()
+
+    assert window.active_workspace == "experiments"
+    assert window.lab_subject == "Physics"
+    assert window.content_stack.currentWidget() is window.lab_gallery_page
+    assert window.lab_gallery_grid.count() == 3
+
+    first_experiment = window.lab_gallery_grid.itemAt(0).widget()
+    assert isinstance(first_experiment, QPushButton)
+    first_experiment.click()
+    assert window.content_stack.currentWidget() is window.lab_detail_page
+    assert window.lab_canvas.experiment.identifier == "projectile-motion"
+    assert window.lab_metric_labels
+
+    initial_range = window.lab_canvas.measurements()["RANGE"]
+    speed_slider = next(
+        slider for slider in window.lab_controls_widget.findChildren(QSlider)
+        if slider.accessibleName() == "Launch speed"
+    )
+    speed_slider.setValue(35)
+    assert window.lab_canvas.measurements()["RANGE"] != initial_range
+
+    window.navigate_back()
+    assert window.content_stack.currentWidget() is window.lab_gallery_page
+    window.navigate_back()
+    assert window.content_stack.currentWidget() is window.lab_home_page
+
+
+def test_biology_and_chemistry_sidebar_subjects_open_their_own_catalogs(window):
+    window.lab_subject_buttons["Biology"].click()
+    biology_titles = {
+        window.lab_gallery_grid.itemAt(index).widget().text().split("\n", 1)[0]
+        for index in range(window.lab_gallery_grid.count())
+    }
+    assert biology_titles == {"Membrane diffusion", "Enzyme activity", "Natural selection"}
+
+    window.lab_subject_buttons["Chemistry"].click()
+    chemistry_titles = {
+        window.lab_gallery_grid.itemAt(index).widget().text().split("\n", 1)[0]
+        for index in range(window.lab_gallery_grid.count())
+    }
+    assert chemistry_titles == {"Reaction rate", "Acid-base titration", "States of matter"}
+
+
 def test_model_selector_updates_description_and_load_state(window, monkeypatch):
     requested = []
     monkeypatch.setattr(

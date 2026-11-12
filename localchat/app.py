@@ -16,11 +16,10 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QPushButton,
     QScrollArea,
+    QSlider,
     QStackedWidget,
     QTextBrowser,
     QTextEdit,
@@ -40,6 +39,8 @@ from localchat.gce import (
     suggested_topic_areas,
 )
 from localchat.models import MODEL_OPTIONS, model_option
+from localchat.lab_data import SUBJECTS as LAB_SUBJECTS, experiment_by_id, experiments_for_subject
+from localchat.lab_widgets import LabCanvas
 
 
 def build_stylesheet() -> str:
@@ -173,6 +174,103 @@ def build_stylesheet() -> str:
     #studySubheading {
         color: #90b8a7;
         font-size: 12px;
+    }
+
+    #sidebarSection {
+        color: #5da98b;
+        font-size: 9px;
+        font-weight: 800;
+        padding: 8px 3px 2px 3px;
+    }
+
+    #labNavButton {
+        background: rgba(8, 33, 28, 0.88);
+        border: 1px solid rgba(61, 133, 107, 0.3);
+        border-radius: 8px;
+        color: #a9cdbb;
+        text-align: left;
+        padding: 10px 12px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    #labNavButton:hover, #labNavButton:checked {
+        background: rgba(15, 58, 44, 0.95);
+        border-color: #58c999;
+        color: #e7fff0;
+    }
+
+    #labSubjectButton {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        color: #8eaa9b;
+        text-align: left;
+        padding: 8px 12px;
+        font-size: 11px;
+    }
+
+    #labSubjectButton:hover {
+        background: rgba(11, 42, 34, 0.86);
+        color: #d7f5e4;
+    }
+
+    #labMetric {
+        background: #0a1a15;
+        border: 1px solid #204837;
+        border-radius: 8px;
+        padding: 10px;
+    }
+
+    #labMetricName {
+        color: #6fa88d;
+        font-size: 9px;
+        font-weight: 700;
+    }
+
+    #labMetricValue {
+        color: #b7f4d0;
+        font-size: 17px;
+        font-weight: 800;
+    }
+
+    #labControlLabel {
+        color: #d8eee2;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    #labControlValue {
+        color: #6fe4aa;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    QSlider::groove:horizontal {
+        height: 5px;
+        background: #18372a;
+        border-radius: 2px;
+    }
+
+    QSlider::sub-page:horizontal {
+        background: #39a975;
+        border-radius: 2px;
+    }
+
+    QSlider::handle:horizontal {
+        width: 15px;
+        margin: -6px 0;
+        background: #b8f5d0;
+        border: 2px solid #287b52;
+        border-radius: 7px;
+    }
+
+    #labSafety {
+        color: #ffce90;
+        background: #211b11;
+        border: 1px solid #65502d;
+        border-radius: 8px;
+        padding: 10px 12px;
     }
 
     QListWidget {
@@ -462,6 +560,12 @@ class MainWindow(QMainWindow):
         self.gce_system_prompt = ""
         self.gce_modes = []
         self.gce_screen = "chat"
+        self.active_workspace = "gce"
+        self.lab_screen = "home"
+        self.lab_subject = ""
+        self.active_experiment = None
+        self.lab_parameter_labels = {}
+        self.lab_metric_labels = {}
         self.gce_pages: dict[str, QWidget] = {}
         self.progress_save_timer = QTimer(self)
         self.progress_save_timer.setSingleShot(True)
@@ -506,17 +610,44 @@ class MainWindow(QMainWindow):
         new_chat.setObjectName("newChatButton")
         side_layout.addWidget(new_chat)
 
-        search = QTextEdit()
-        search.setObjectName("searchBox")
-        search.setFixedHeight(40)
-        search.setPlaceholderText("Search chats")
-        search.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        search.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        side_layout.addWidget(search)
+        lab_label = QLabel("INTERACTIVE LAB")
+        lab_label.setObjectName("sidebarSection")
+        side_layout.addWidget(lab_label)
 
-        self.chat_list = QListWidget()
-        self.chat_list.setAlternatingRowColors(False)
-        side_layout.addWidget(self.chat_list, 1)
+        self.lab_library_button = QPushButton("✳  Experiment library")
+        self.lab_library_button.setObjectName("labNavButton")
+        self.lab_library_button.clicked.connect(self.open_experiment_library)
+        side_layout.addWidget(self.lab_library_button)
+
+        self.lab_subject_buttons = {}
+        for subject in LAB_SUBJECTS:
+            button = QPushButton(f"›  {subject}")
+            button.setObjectName("labSubjectButton")
+            button.clicked.connect(lambda _checked=False, value=subject: self.open_experiments_subject(value))
+            side_layout.addWidget(button)
+            self.lab_subject_buttons[subject] = button
+
+        workspace_label = QLabel("STUDY & CREATE")
+        workspace_label.setObjectName("sidebarSection")
+        side_layout.addWidget(workspace_label)
+
+        self.gce_study_button = QPushButton("GCE Learning")
+        self.gce_study_button.setObjectName("labNavButton")
+        self.gce_study_button.setAccessibleName("Open GCE level and subject selection")
+        self.gce_study_button.clicked.connect(self.open_gce_levels)
+        side_layout.addWidget(self.gce_study_button)
+
+        self.ai_workspace_button = QPushButton("AI Workspace")
+        self.ai_workspace_button.setObjectName("labNavButton")
+        self.ai_workspace_button.setAccessibleName("Open general AI chat workspace")
+        self.ai_workspace_button.clicked.connect(self.open_ai_workspace)
+        side_layout.addWidget(self.ai_workspace_button)
+
+        side_layout.addStretch(1)
+        lab_note = QLabel("VIRTUAL PRE-LAB\nExplore safely before the bench.")
+        lab_note.setObjectName("studySubheading")
+        lab_note.setWordWrap(True)
+        side_layout.addWidget(lab_note)
 
         main_panel = QWidget()
         main_panel.setObjectName("chatPanel")
@@ -533,7 +664,7 @@ class MainWindow(QMainWindow):
         self.back_button = QPushButton("← Back")
         self.back_button.setObjectName("newChatButton")
         self.back_button.hide()
-        self.back_button.clicked.connect(self.gce_back)
+        self.back_button.clicked.connect(self.navigate_back)
         header_layout.addWidget(self.back_button)
 
         brand = QLabel("Fuserio")
@@ -568,19 +699,7 @@ class MainWindow(QMainWindow):
 
         self._build_chat_page()
         self._build_gce_pages()
-
-        self.gce_study_button = QPushButton("GCE Study")
-        self.gce_study_button.setText("GCE Learning")
-        self.gce_study_button.setObjectName("newChatButton")
-        self.gce_study_button.setAccessibleName("Open GCE level and subject selection")
-        side_layout.insertWidget(1, self.gce_study_button)
-        self.gce_study_button.clicked.connect(self.open_gce_levels)
-
-        self.ai_workspace_button = QPushButton("AI Workspace")
-        self.ai_workspace_button.setObjectName("newChatButton")
-        self.ai_workspace_button.setAccessibleName("Open general AI chat workspace")
-        side_layout.insertWidget(2, self.ai_workspace_button)
-        self.ai_workspace_button.clicked.connect(self.open_ai_workspace)
+        self._build_experiment_pages()
 
         outer.addWidget(sidebar, 1)
         outer.addWidget(main_panel, 5)
@@ -747,6 +866,217 @@ class MainWindow(QMainWindow):
         self.content_stack.addWidget(self.subject_page)
         self.gce_pages["subjects"] = self.subject_page
 
+    def _build_experiment_pages(self):
+        self.lab_home_page = self._selection_page(
+            "The virtual pre-lab",
+            "Explore a scientific idea safely. Change a variable, watch the model respond, and make a prediction before the real bench.",
+        )
+        self.lab_subject_grid = QGridLayout()
+        self.lab_subject_grid.setSpacing(14)
+        for index, subject in enumerate(LAB_SUBJECTS):
+            count = len(experiments_for_subject(subject))
+            button = self._study_card(subject, f"{count} interactive experiments  ·  OPEN LAB  →")
+            button.clicked.connect(lambda _checked=False, value=subject: self.open_experiments_subject(value))
+            self.lab_subject_grid.addWidget(button, 0, index)
+        self.lab_home_page.layout().addLayout(self.lab_subject_grid)
+        self.lab_home_page.layout().addStretch(1)
+        self.content_stack.addWidget(self.lab_home_page)
+
+        self.lab_gallery_page = self._selection_page(
+            "Choose an experiment",
+            "Short, interactive models for exploring variables before a practical lesson.",
+        )
+        self.lab_gallery_heading = self.lab_gallery_page.findChild(QLabel, "studyHeading")
+        self.lab_gallery_grid_container = QWidget()
+        self.lab_gallery_grid = QGridLayout(self.lab_gallery_grid_container)
+        self.lab_gallery_grid.setContentsMargins(0, 0, 0, 0)
+        self.lab_gallery_grid.setSpacing(12)
+        gallery_scroll = QScrollArea()
+        gallery_scroll.setWidgetResizable(True)
+        gallery_scroll.setFrameShape(QScrollArea.NoFrame)
+        gallery_scroll.setWidget(self.lab_gallery_grid_container)
+        self.lab_gallery_page.layout().addWidget(gallery_scroll, 1)
+        self.content_stack.addWidget(self.lab_gallery_page)
+
+        self.lab_detail_page = QWidget()
+        detail_page_layout = QVBoxLayout(self.lab_detail_page)
+        detail_page_layout.setContentsMargins(0, 0, 0, 0)
+        detail_scroll = QScrollArea()
+        detail_scroll.setWidgetResizable(True)
+        detail_scroll.setFrameShape(QScrollArea.NoFrame)
+        self.lab_detail_content = QWidget()
+        self.lab_detail_layout = QVBoxLayout(self.lab_detail_content)
+        self.lab_detail_layout.setContentsMargins(22, 18, 22, 20)
+        self.lab_detail_layout.setSpacing(12)
+
+        self.lab_detail_title = QLabel("")
+        self.lab_detail_title.setObjectName("studyHeading")
+        self.lab_detail_layout.addWidget(self.lab_detail_title)
+        self.lab_detail_subtitle = QLabel("")
+        self.lab_detail_subtitle.setObjectName("studySubheading")
+        self.lab_detail_layout.addWidget(self.lab_detail_subtitle)
+
+        self.lab_canvas = LabCanvas()
+        self.lab_detail_layout.addWidget(self.lab_canvas, 1)
+
+        self.lab_toolbar = QWidget()
+        toolbar_layout = QHBoxLayout(self.lab_toolbar)
+        toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        toolbar_layout.setSpacing(8)
+        self.lab_play_button = QPushButton("▶  Run simulation")
+        self.lab_play_button.setObjectName("sendButton")
+        self.lab_play_button.clicked.connect(self._toggle_lab_simulation)
+        toolbar_layout.addWidget(self.lab_play_button)
+        self.lab_reset_button = QPushButton("↺  Reset")
+        self.lab_reset_button.setObjectName("studyModeButton")
+        self.lab_reset_button.clicked.connect(self._reset_lab_simulation)
+        toolbar_layout.addWidget(self.lab_reset_button)
+        toolbar_layout.addStretch(1)
+        self.lab_detail_layout.addWidget(self.lab_toolbar)
+
+        self.lab_metrics_row = QWidget()
+        self.lab_metrics_layout = QHBoxLayout(self.lab_metrics_row)
+        self.lab_metrics_layout.setContentsMargins(0, 0, 0, 0)
+        self.lab_metrics_layout.setSpacing(8)
+        self.lab_detail_layout.addWidget(self.lab_metrics_row)
+
+        self.lab_controls_widget = QWidget()
+        self.lab_controls_layout = QVBoxLayout(self.lab_controls_widget)
+        self.lab_controls_layout.setContentsMargins(0, 0, 0, 0)
+        self.lab_controls_layout.setSpacing(6)
+        self.lab_detail_layout.addWidget(self.lab_controls_widget)
+
+        self.lab_objective = QLabel("")
+        self.lab_objective.setWordWrap(True)
+        self.lab_objective.setObjectName("studySubheading")
+        self.lab_detail_layout.addWidget(self.lab_objective)
+        self.lab_safety = QLabel("")
+        self.lab_safety.setWordWrap(True)
+        self.lab_safety.setObjectName("labSafety")
+        self.lab_detail_layout.addWidget(self.lab_safety)
+
+        detail_scroll.setWidget(self.lab_detail_content)
+        detail_page_layout.addWidget(detail_scroll)
+        self.content_stack.addWidget(self.lab_detail_page)
+
+    def _clear_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+    def open_experiment_library(self):
+        self.active_workspace = "experiments"
+        self.lab_screen = "home"
+        self.back_button.hide()
+        self.content_stack.setCurrentWidget(self.lab_home_page)
+
+    def open_experiments_subject(self, subject: str):
+        if subject not in LAB_SUBJECTS:
+            return
+        self.active_workspace = "experiments"
+        self.lab_subject = subject
+        self.lab_screen = "gallery"
+        self.lab_gallery_heading.setText(f"{subject} experiments")
+        self._clear_layout(self.lab_gallery_grid)
+        for index, experiment in enumerate(experiments_for_subject(subject)):
+            detail = f"{experiment.subtitle}\nOPEN PRE-LAB  →"
+            button = self._study_card(experiment.title, detail)
+            button.setAccessibleName(f"Open {experiment.title} interactive simulation")
+            button.clicked.connect(lambda _checked=False, value=experiment.identifier: self.open_experiment(value))
+            self.lab_gallery_grid.addWidget(button, index // 2, index % 2)
+        self.back_button.show()
+        self.content_stack.setCurrentWidget(self.lab_gallery_page)
+
+    def open_experiment(self, identifier: str):
+        experiment = experiment_by_id(identifier)
+        if not experiment:
+            return
+        self.active_workspace = "experiments"
+        self.lab_screen = "detail"
+        self.active_experiment = experiment
+        self.lab_detail_title.setText(experiment.title)
+        self.lab_detail_subtitle.setText(f"{experiment.subject.upper()}  /  VIRTUAL PRE-LAB  /  {experiment.subtitle}")
+        self.lab_objective.setText(f"<b>INVESTIGATE</b>  {html.escape(experiment.objective)}")
+        self.lab_safety.setText(f"<b>SAFETY NOTE</b>  {html.escape(experiment.safety)}")
+        self.lab_canvas.set_experiment(experiment)
+        self._build_lab_controls(experiment)
+        self._update_lab_metrics()
+        self.lab_play_button.setText("▶  Run simulation")
+        self.back_button.show()
+        self.content_stack.setCurrentWidget(self.lab_detail_page)
+
+    def _build_lab_controls(self, experiment):
+        self._clear_layout(self.lab_controls_layout)
+        self.lab_parameter_labels = {}
+        for parameter in experiment.parameters:
+            row = QWidget()
+            row_layout = QVBoxLayout(row)
+            row_layout.setContentsMargins(0, 2, 0, 2)
+            row_layout.setSpacing(2)
+            label_row = QHBoxLayout()
+            label = QLabel(parameter.label)
+            label.setObjectName("labControlLabel")
+            value_label = QLabel(f"{parameter.value} {parameter.unit}".strip())
+            value_label.setObjectName("labControlValue")
+            label_row.addWidget(label)
+            label_row.addStretch(1)
+            label_row.addWidget(value_label)
+            row_layout.addLayout(label_row)
+            slider = QSlider(Qt.Horizontal)
+            slider.setRange(parameter.minimum, parameter.maximum)
+            slider.setValue(parameter.value)
+            slider.setAccessibleName(parameter.label)
+            slider.valueChanged.connect(
+                lambda value, item=parameter: self._lab_parameter_changed(item, value)
+            )
+            row_layout.addWidget(slider)
+            self.lab_parameter_labels[parameter.key] = value_label
+            self.lab_controls_layout.addWidget(row)
+
+    def _lab_parameter_changed(self, parameter, value: int):
+        self.lab_canvas.set_parameter(parameter.key, value)
+        self.lab_parameter_labels[parameter.key].setText(f"{value} {parameter.unit}".strip())
+        self._update_lab_metrics()
+
+    def _update_lab_metrics(self):
+        measurements = self.lab_canvas.measurements()
+        if set(measurements) == set(self.lab_metric_labels):
+            for name, value in measurements.items():
+                self.lab_metric_labels[name].setText(value)
+            return
+
+        self._clear_layout(self.lab_metrics_layout)
+        self.lab_metric_labels = {}
+        for name, value in measurements.items():
+            metric = QWidget()
+            metric.setObjectName("labMetric")
+            metric_layout = QVBoxLayout(metric)
+            metric_layout.setContentsMargins(10, 7, 10, 7)
+            metric_layout.setSpacing(3)
+            name_label = QLabel(name)
+            name_label.setObjectName("labMetricName")
+            value_label = QLabel(value)
+            value_label.setObjectName("labMetricValue")
+            metric_layout.addWidget(name_label)
+            metric_layout.addWidget(value_label)
+            self.lab_metrics_layout.addWidget(metric, 1)
+            self.lab_metric_labels[name] = value_label
+
+    def _toggle_lab_simulation(self):
+        if self.lab_canvas.running:
+            self.lab_canvas.pause()
+            self.lab_play_button.setText("▶  Resume simulation")
+        else:
+            self.lab_canvas.play()
+            self.lab_play_button.setText("Ⅱ  Pause simulation")
+
+    def _reset_lab_simulation(self):
+        self.lab_canvas.reset()
+        self.lab_play_button.setText("▶  Run simulation")
+        self._update_lab_metrics()
+
     def _selection_page(self, heading: str, subheading: str) -> QWidget:
         page = QWidget()
         page.setObjectName("selectionPage")
@@ -769,6 +1099,7 @@ class MainWindow(QMainWindow):
         return button
 
     def open_gce_levels(self):
+        self.active_workspace = "gce"
         selection = self.progress.get("selection", {})
         level = selection.get("level", "")
         stream = selection.get("stream", "")
@@ -785,6 +1116,7 @@ class MainWindow(QMainWindow):
         self._save_selection()
 
     def open_ai_workspace(self):
+        self.active_workspace = "chat"
         self.gce_level = ""
         self.gce_stream = ""
         self.gce_subject = ""
@@ -908,6 +1240,22 @@ class MainWindow(QMainWindow):
         self.content_stack.setCurrentWidget(self.chat_page)
         self.back_button.hide()
 
+    def navigate_back(self):
+        if self.active_workspace == "experiments":
+            if self.lab_screen == "detail":
+                self.lab_screen = "gallery"
+                self.content_stack.setCurrentWidget(self.lab_gallery_page)
+            elif self.lab_screen == "gallery":
+                self.lab_screen = "home"
+                self.content_stack.setCurrentWidget(self.lab_home_page)
+                self.back_button.hide()
+            else:
+                self.active_workspace = "gce"
+                self.content_stack.setCurrentWidget(self.level_page)
+                self.back_button.hide()
+            return
+        self.gce_back()
+
     def start_learning_mode(self, mode: str):
         if mode not in LEARNING_MODES or not self.gce_subject:
             return
@@ -959,17 +1307,6 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Could not save local study progress: {error}")
 
     def _load_demo_data(self):
-        chats = [
-            ("GPU triage", "three hidden bottlenecks in the render pass"),
-            ("LLM notes", "prototype memory-safe attention paths"),
-            ("Server logs", "watching llama.cpp begin a clean startup"),
-        ]
-
-        for title, preview in chats:
-            item = QListWidgetItem(title)
-            item.setToolTip(preview)
-            self.chat_list.addItem(item)
-
         self._render_messages()
 
     def new_chat(self):
