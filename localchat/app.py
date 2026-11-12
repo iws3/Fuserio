@@ -915,6 +915,7 @@ class MainWindow(QMainWindow):
         self.lab_gallery_grid = QGridLayout(self.lab_gallery_grid_container)
         self.lab_gallery_grid.setContentsMargins(0, 0, 0, 0)
         self.lab_gallery_grid.setSpacing(12)
+        self.lab_gallery_grid.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         gallery_scroll = QScrollArea()
         gallery_scroll.setWidgetResizable(True)
         gallery_scroll.setFrameShape(QScrollArea.NoFrame)
@@ -1045,7 +1046,10 @@ class MainWindow(QMainWindow):
             item = layout.takeAt(0)
             widget = item.widget()
             if widget:
+                widget.hide()
+                widget.setParent(None)
                 widget.deleteLater()
+            layout.invalidate()
 
     def open_experiment_library(self):
         self.active_workspace = "experiments"
@@ -1962,6 +1966,8 @@ class MainWindow(QMainWindow):
             "nabla": "∇", "sum": "∑", "prod": "∏", "int": "∫",
             "sqrt": "√", "therefore": "∴", "because": "∵", "perp": "⊥",
             "parallel": "∥", "angle": "∠", "Delta": "Δ", "emptyset": "∅",
+            "sin": "sin ", "cos": "cos ", "tan": "tan ",
+            "log": "log ", "ln": "ln ", "propto": "∝",
         }
 
         def read_argument(source: str, start: int) -> tuple[str, int]:

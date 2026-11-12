@@ -165,19 +165,27 @@ def test_experiment_sidebar_opens_subject_gallery_and_live_simulation(window):
 
 
 def test_biology_and_chemistry_sidebar_subjects_open_their_own_catalogs(window):
+    from PySide6.QtWidgets import QApplication
+
     window.lab_subject_buttons["Biology"].click()
     biology_titles = {
         window.lab_gallery_grid.itemAt(index).widget().text().split("\n", 1)[0]
         for index in range(window.lab_gallery_grid.count())
     }
     assert biology_titles == {"Membrane diffusion", "Enzyme activity", "Natural selection"}
+    biology_cards = [
+        window.lab_gallery_grid.itemAt(index).widget()
+        for index in range(window.lab_gallery_grid.count())
+    ]
 
     window.lab_subject_buttons["Chemistry"].click()
+    QApplication.processEvents()
     chemistry_titles = {
         window.lab_gallery_grid.itemAt(index).widget().text().split("\n", 1)[0]
         for index in range(window.lab_gallery_grid.count())
     }
     assert chemistry_titles == {"Reaction rate", "Acid-base titration", "States of matter"}
+    assert all(not card.isVisible() for card in biology_cards)
 
 
 def test_experiment_tutor_receives_subject_readings_and_safety_context(window):
