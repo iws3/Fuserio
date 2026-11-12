@@ -199,6 +199,23 @@ def test_experiment_tutor_receives_subject_readings_and_safety_context(window):
     assert window.content_stack.currentWidget() is window.lab_detail_page
 
 
+def test_experiment_predictions_and_observations_restore_per_experiment(window):
+    window.open_experiments_subject("Physics")
+    window.lab_gallery_grid.itemAt(0).widget().click()
+    window.lab_prediction_edit.setPlainText("A larger launch angle should increase the apex.")
+    window.lab_observation_edit.setPlainText("At 60 degrees the height increased, but range changed too.")
+    window._save_lab_notes()
+
+    saved = window.progress["experiments"]["projectile-motion"]
+    assert saved["prediction"].startswith("A larger launch angle")
+    assert saved["observation"].startswith("At 60 degrees")
+
+    window.navigate_back()
+    window.open_experiment("projectile-motion")
+    assert window.lab_prediction_edit.toPlainText() == saved["prediction"]
+    assert window.lab_observation_edit.toPlainText() == saved["observation"]
+
+
 def test_model_selector_updates_description_and_load_state(window, monkeypatch):
     requested = []
     monkeypatch.setattr(

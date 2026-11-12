@@ -570,6 +570,9 @@ class MainWindow(QMainWindow):
         self.progress_save_timer = QTimer(self)
         self.progress_save_timer.setSingleShot(True)
         self.progress_save_timer.timeout.connect(self._save_progress)
+        self.lab_notes_save_timer = QTimer(self)
+        self.lab_notes_save_timer.setSingleShot(True)
+        self.lab_notes_save_timer.timeout.connect(self._save_lab_notes)
         self.chat_render_timer = QTimer(self)
         self.chat_render_timer.setSingleShot(True)
         self.chat_render_timer.setInterval(40)
@@ -972,6 +975,27 @@ class MainWindow(QMainWindow):
         self.lab_objective.setWordWrap(True)
         self.lab_objective.setObjectName("studySubheading")
         self.lab_detail_layout.addWidget(self.lab_objective)
+
+        prediction_label = QLabel("MAKE A PREDICTION")
+        prediction_label.setObjectName("labControlLabel")
+        self.lab_detail_layout.addWidget(prediction_label)
+        self.lab_prediction_edit = QTextEdit()
+        self.lab_prediction_edit.setObjectName("composer")
+        self.lab_prediction_edit.setPlaceholderText("What do you predict will happen when you change one variable?")
+        self.lab_prediction_edit.setFixedHeight(68)
+        self.lab_prediction_edit.textChanged.connect(self._schedule_lab_notes_save)
+        self.lab_detail_layout.addWidget(self.lab_prediction_edit)
+
+        observation_label = QLabel("OBSERVATIONS & CONCLUSION")
+        observation_label.setObjectName("labControlLabel")
+        self.lab_detail_layout.addWidget(observation_label)
+        self.lab_observation_edit = QTextEdit()
+        self.lab_observation_edit.setObjectName("composer")
+        self.lab_observation_edit.setPlaceholderText("Record what changed, compare with your prediction, and explain why.")
+        self.lab_observation_edit.setFixedHeight(82)
+        self.lab_observation_edit.textChanged.connect(self._schedule_lab_notes_save)
+        self.lab_detail_layout.addWidget(self.lab_observation_edit)
+
         self.lab_safety = QLabel("")
         self.lab_safety.setWordWrap(True)
         self.lab_safety.setObjectName("labSafety")
@@ -1026,6 +1050,13 @@ class MainWindow(QMainWindow):
         self.lab_canvas.set_playback_rate(self.lab_speed_slider.value() / 100)
         self._build_lab_controls(experiment)
         self._update_lab_metrics()
+        notes = self.progress.setdefault("experiments", {}).get(experiment.identifier, {})
+        self.lab_prediction_edit.blockSignals(True)
+        self.lab_observation_edit.blockSignals(True)
+        self.lab_prediction_edit.setPlainText(notes.get("prediction", ""))
+        self.lab_observation_edit.setPlainText(notes.get("observation", ""))
+        self.lab_prediction_edit.blockSignals(False)
+        self.lab_observation_edit.blockSignals(False)
         self.lab_play_button.setText("▶  Run simulation")
         self.back_button.show()
         self.content_stack.setCurrentWidget(self.lab_detail_page)
@@ -1099,6 +1130,19 @@ class MainWindow(QMainWindow):
         self.lab_canvas.reset()
         self.lab_play_button.setText("▶  Run simulation")
         self._update_lab_metrics()
+
+    def _schedule_lab_notes_save(self):
+        self.lab_notes_save_timer.start(300)
+
+    def _save_lab_notes(self):
+        if not self.active_experiment:
+            return
+        self.progress.setdefault("experiments", {})[self.active_experiment.identifier] = {
+            "prediction": self.lab_prediction_edit.toPlainText(),
+            "observation": self.lab_observation_edit.toPlainText(),
+            "updated": int(time.time()),
+        }
+        self._save_progress()
 
     def ask_lab_tutor(self):
         experiment = self.active_experiment
@@ -1968,6 +2012,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.progress_save_timer.stop()
+        self.lab_notes_save_timer.stop()
+        self._save_lab_notes()
         self._save_progress()
         if self.chat_worker and self.chat_worker.isRunning():
             self.chat_worker.cancel()
