@@ -201,12 +201,15 @@ def test_biology_and_chemistry_sidebar_subjects_open_their_own_catalogs(window):
 
 
 def test_experiment_tutor_receives_subject_readings_and_safety_context(window):
+    window.show()
+    QApplication.processEvents()
     window.open_experiments_subject("Physics")
     experiment_button = window.lab_gallery_grid.itemAt(0).widget()
     experiment_button.click()
     readings = window.lab_canvas.measurements()
 
     window.ask_lab_tutor()
+    QApplication.processEvents()
 
     tutor_request = FakeChatWorker.instances[-1].messages
     system_prompt = tutor_request[0]["content"]
@@ -215,6 +218,7 @@ def test_experiment_tutor_receives_subject_readings_and_safety_context(window):
     assert "Projectile motion" in system_prompt
     assert "Safety boundary" in system_prompt
     assert readings["RANGE"] in tutor_request[-1]["content"]
+    assert window.lab_tutor_panel.isVisible()
     assert window.active_workspace == "experiments"
     assert window.lab_screen == "tutor"
     window.navigate_back()

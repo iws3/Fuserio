@@ -279,6 +279,13 @@ def build_stylesheet() -> str:
         padding: 10px 12px;
     }
 
+    #labTutorPanel {
+        background: rgba(8, 23, 20, 0.95);
+        border: 1px solid rgba(89, 220, 169, 0.38);
+        border-radius: 12px;
+        padding: 4px;
+    }
+
     #labEquation {
         background: #091713;
         border: 1px solid #204837;
@@ -587,6 +594,7 @@ class MainWindow(QMainWindow):
         self.active_experiment = None
         self.lab_parameter_labels = {}
         self.lab_metric_labels = {}
+        self.lab_side_panel_active = False
         self.gce_pages: dict[str, QWidget] = {}
         self.progress_save_timer = QTimer(self)
         self.progress_save_timer.setSingleShot(True)
@@ -941,8 +949,39 @@ class MainWindow(QMainWindow):
         self.lab_detail_subtitle.setObjectName("studySubheading")
         self.lab_detail_layout.addWidget(self.lab_detail_subtitle)
 
+        self.lab_workspace = QWidget()
+        self.lab_workspace_layout = QHBoxLayout(self.lab_workspace)
+        self.lab_workspace_layout.setContentsMargins(0, 0, 0, 0)
+        self.lab_workspace_layout.setSpacing(12)
+
+        self.lab_canvas_shell = QWidget()
+        self.lab_canvas_shell.setObjectName("labCanvas")
+        self.lab_canvas_shell.setMinimumHeight(420)
+        self.lab_canvas_shell_layout = QVBoxLayout(self.lab_canvas_shell)
+        self.lab_canvas_shell_layout.setContentsMargins(10, 10, 10, 10)
         self.lab_canvas = LabCanvas()
-        self.lab_detail_layout.addWidget(self.lab_canvas, 1)
+        self.lab_canvas.setMinimumHeight(380)
+        self.lab_canvas_shell_layout.addWidget(self.lab_canvas)
+        self.lab_workspace_layout.addWidget(self.lab_canvas_shell, 3)
+
+        self.lab_tutor_panel = QWidget()
+        self.lab_tutor_panel.setObjectName("labTutorPanel")
+        self.lab_tutor_panel.setMinimumWidth(320)
+        self.lab_tutor_panel.hide()
+        self.lab_tutor_panel_layout = QVBoxLayout(self.lab_tutor_panel)
+        self.lab_tutor_panel_layout.setContentsMargins(12, 12, 12, 12)
+        self.lab_tutor_panel_layout.setSpacing(10)
+        self.lab_tutor_panel_title = QLabel("Fuserio artifacts")
+        self.lab_tutor_panel_title.setObjectName("labControlLabel")
+        self.lab_tutor_panel_layout.addWidget(self.lab_tutor_panel_title)
+        self.lab_tutor_stream = QTextBrowser()
+        self.lab_tutor_stream.setObjectName("chatView")
+        self.lab_tutor_stream.setReadOnly(True)
+        self.lab_tutor_stream.setOpenExternalLinks(False)
+        self.lab_tutor_stream.setMinimumHeight(350)
+        self.lab_tutor_panel_layout.addWidget(self.lab_tutor_stream, 1)
+        self.lab_workspace_layout.addWidget(self.lab_tutor_panel, 1)
+        self.lab_detail_layout.addWidget(self.lab_workspace, 1)
 
         self.lab_toolbar = QWidget()
         toolbar_layout = QHBoxLayout(self.lab_toolbar)
@@ -1198,24 +1237,23 @@ class MainWindow(QMainWindow):
         current_readings = "; ".join(
             f"{name}: {value}" for name, value in self.lab_canvas.measurements().items()
         )
-        self.gce_system_prompt = "\n".join(
+        prompt = "\n".join(
             (
-                "You are a clear science tutor explaining a simplified interactive pre-lab model.",
+                "You are a creative but precise science tutor for a pre-lab simulation.",
+                "Respond as if you are providing a realistic technician-style artifact: a short plan, interpretation of the current readings, a concise explanation of the science, and an actionable next step.",
                 f"The selected subject is {experiment.subject}; the experiment is {experiment.title}.",
                 f"Learning objective: {experiment.objective}",
                 f"Safety boundary: {experiment.safety}",
-                "Explain the science and what the displayed measurements mean. State when the simulation "
-                "omits real-world effects. Do not instruct the student to perform hazardous procedures "
-                "without appropriate teacher supervision and safety equipment.",
-                "Use short, step-by-step language and invite the student to predict what happens when "
-                "they change one control.",
+                f"Current readings: {current_readings}",
+                "Use bullet points and short sections, not a generic textbook paragraph."
             )
         )
-        question = f"Explain this model and interpret its current readings: {current_readings}."
-        self.messages = [
-            {"role": "user", "content": f"Explain {experiment.title} and its current readings."},
-            {"role": "assistant", "content": "", "reasoning": ""},
-        ]
+        self.lab_tutor_stream.clear()
+        self.lab_tutor_stream.setPlainText("Preparing lab insight…\n\n")
+        self.lab_tutor_panel.setVisible(True)
+        self.lab_tutor_panel.show()
+        self.lab_tutor_panel.raise_()
+        self.lab_side_panel_active = True
         self.study_context_label.setText(
             f"PRE-LAB TUTOR  /  {experiment.subject.upper()}  /  {experiment.title.upper()}"
         )
@@ -1223,12 +1261,11 @@ class MainWindow(QMainWindow):
         self.mode_bar.hide()
         self.active_workspace = "experiments"
         self.lab_screen = "tutor"
-        self.content_stack.setCurrentWidget(self.chat_page)
-        self._render_messages()
+        self.content_stack.setCurrentWidget(self.lab_detail_page)
         self._start_chat_request([
-            {"role": "system", "content": self.gce_system_prompt},
-            {"role": "user", "content": question},
-        ])
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Explain the experiment and tell me what to do next based on the current readings: {current_readings}."},
+        ], side_panel=True)
 
     def _step_lab_simulation(self):
         self.lab_canvas.step()
@@ -1715,6 +1752,11 @@ class MainWindow(QMainWindow):
             self.model_detail.setText("Local model")
 
     def _append_stream_chunk(self, reasoning: str, content: str):
+        if self.lab_side_panel_active:
+            if content:
+                self.lab_tutor_stream.insertPlainText(content)
+                self.lab_tutor_stream.ensureCursorVisible()
+            return
         if not self.messages:
             return
         self.messages[-1]["reasoning"] += reasoning
@@ -1738,6 +1780,13 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Chat failed: {message}")
 
     def _chat_finished(self):
+        if self.lab_side_panel_active:
+            self.lab_tutor_stream.insertPlainText("\n\nArtifact ready.\n")
+            self.lab_side_panel_active = False
+            self.chat_worker = None
+            self.send_button.setText("Send")
+            self.send_button.setEnabled(bool(self.base_url))
+            return
         self.chat_render_timer.stop()
         self._flush_chat_render()
         if self.messages and self.messages[-1]["role"] == "assistant":
@@ -1871,11 +1920,16 @@ class MainWindow(QMainWindow):
         self,
         api_messages: list[dict[str, str]],
         parameters: dict[str, object] | None = None,
+        side_panel: bool = False,
     ):
         if not self.base_url:
             self.statusBar().showMessage("Connect a local model before chatting.")
             return
-        if self.messages and self.messages[-1]["role"] == "assistant":
+        if side_panel:
+            self.lab_side_panel_active = True
+            self.lab_tutor_stream.clear()
+            self.lab_tutor_stream.setPlainText("Preparing lab insight…\n\n")
+        elif self.messages and self.messages[-1]["role"] == "assistant":
             self.messages[-1]["streaming"] = True
             self.messages[-1]["stream_chunks"] = 0
             self._render_messages()
