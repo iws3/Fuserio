@@ -123,12 +123,14 @@ EXPERIMENTS = (
         subject="Chemistry",
         title="Acid-base titration",
         subtitle="Find the endpoint carefully",
-        description="Add titrant in measured steps and observe an indicator color change near the endpoint.",
-        objective="Read the burette volume and distinguish a gradual pH change from the endpoint region.",
+        description="Add titrant in measured steps and observe the pH jump and indicator colour change near the end point.",
+        objective="Compare the endpoint and equivalence volume for different acid-base pairs and predict which indicator works best.",
         safety="Model only. Real acids and bases require teacher supervision, goggles and proper disposal.",
         parameters=(
             LabParameter("volume", "Titrant added", 0, 50, 0, "mL"),
             LabParameter("concentration", "Titrant concentration", 10, 100, 50, "%"),
+            LabParameter("flavor", "Titration pair", 0, 2, 0, "mode"),
+            LabParameter("indicator", "Indicator", 0, 2, 0, "mode"),
         ),
     ),
     Experiment(

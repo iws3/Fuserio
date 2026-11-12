@@ -5,6 +5,7 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
 
 from localchat.lab_data import Experiment
+from localchat.titration import INDICATORS, TITRATION_FLAVORS, flavor_by_id, indicator_color, titration_ph
 
 
 BACKGROUND = QColor("#06120f")
@@ -122,8 +123,16 @@ class LabCanvas(QWidget):
             return {"TEMP": f"{temperature} °C", "COLLISIONS": f"{rate:.0f}/s"}
         if experiment_id == "titration":
             volume = p.get("volume", 0)
-            ph = 3 + 11 / (1 + math.exp(-(volume - 25) / 2.8))
-            return {"VOLUME": f"{volume:.1f} mL", "MODEL pH": f"{ph:.1f}"}
+            flavor = flavor_by_id(TITRATION_FLAVORS[p.get("flavor", 0)].identifier)
+            indicator = INDICATORS[p.get("indicator", 0)]
+            acid_molarity = 0.1
+            base_molarity = 0.1
+            ph = titration_ph(flavor, acid_molarity, 25.0, base_molarity, volume)
+            return {
+                "VOLUME": f"{volume:.1f} mL",
+                "MODEL pH": f"{ph:.2f}",
+                "INDICATOR": indicator,
+            }
         temperature = p.get("temperature", 35)
         state = "SOLID-LIKE" if temperature < 30 else "LIQUID-LIKE" if temperature < 70 else "GAS-LIKE"
         return {"TEMP": f"{temperature} °C", "MODEL STATE": state}
@@ -336,25 +345,31 @@ class LabCanvas(QWidget):
 
     def _draw_titration(self, painter: QPainter, bounds):
         volume = self.parameters.get("volume", 0)
+        flavor = flavor_by_id(TITRATION_FLAVORS[self.parameters.get("flavor", 0)].identifier)
+        indicator = INDICATORS[self.parameters.get("indicator", 0)]
         center = bounds.width() * 0.53
         beaker = QRectF(center - 75, 120, 150, bounds.height() - 175)
-        fill_height = beaker.height() * 0.58
+        ph = titration_ph(flavor, 0.1, 25.0, 0.1, volume)
+        color = QColor(*indicator_color(indicator, ph))
+        fill_height = beaker.height() * min(0.9, 0.22 + (volume / 50.0) * 0.92)
         liquid = QRectF(beaker.left() + 4, beaker.bottom() - fill_height, beaker.width() - 8, fill_height - 4)
-        color_amount = max(0, min(1, (volume - 18) / 14))
-        liquid_color = QColor.fromRgbF(0.20 + color_amount * 0.45, 0.70 - color_amount * 0.42, 0.48 + color_amount * 0.27, 0.75)
         painter.setPen(QPen(QColor("#93b7a9"), 2))
         painter.setBrush(Qt.NoBrush)
         painter.drawRoundedRect(beaker, 4, 4)
-        painter.fillRect(liquid, liquid_color)
+        painter.fillRect(liquid, color)
         burette = QRectF(center + 105, 50, 25, bounds.height() * 0.48)
         painter.setPen(QPen(CYAN, 2))
         painter.drawRoundedRect(burette, 4, 4)
-        painter.fillRect(QRectF(burette.left() + 3, burette.top() + 3, burette.width() - 6, burette.height() * max(0.1, 1 - volume / 55)), QColor("#63cfc7"))
+        drop_height = max(12, (bounds.height() * 0.48) * max(0.1, min(1.0, volume / 50.0)))
+        painter.fillRect(QRectF(burette.left() + 3, burette.top() + 3, burette.width() - 6, drop_height), QColor("#63cfc7"))
+        painter.setPen(QPen(AMBER, 2))
+        painter.drawLine(center + 25, 188, center + 25, 130 + 0.9 * volume)
         if self.running and int(self.elapsed * 2) % 2 == 0:
             painter.setPen(Qt.NoPen)
             painter.setBrush(AMBER)
-            painter.drawEllipse(QPointF(center + 117, 325), 3, 5)
-        self._caption(painter, "INDICATOR · COLOUR APPROACHES ENDPOINT", 22, bounds.height() - 18, AMBER)
+            painter.drawEllipse(QPointF(center + 117, 235 + volume * 1.1), 3, 5)
+        self._caption(painter, f"{indicator.upper()}  ·  {flavor.label}", 22, bounds.height() - 18, AMBER)
+        self._caption(painter, f"pH {ph:.2f}", center - 10, 90, TEXT)
 
     def _draw_particle_states(self, painter: QPainter, bounds):
         temperature = self.parameters.get("temperature", 35)
