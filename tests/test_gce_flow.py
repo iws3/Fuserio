@@ -164,6 +164,18 @@ def test_experiment_sidebar_opens_subject_gallery_and_live_simulation(window):
     assert window.content_stack.currentWidget() is window.lab_home_page
 
 
+def test_experiment_workspace_clears_previous_gce_tutor_context(window):
+    window.gce_subject = "Physics"
+    window.gce_system_prompt = "O Level GCE physics instructions"
+    window.gce_modes = [{"mode": "Practice", "time": 1}]
+
+    window.open_experiments_subject("Chemistry")
+
+    assert window.gce_subject == ""
+    assert window.gce_system_prompt == ""
+    assert window.gce_modes == []
+
+
 def test_biology_and_chemistry_sidebar_subjects_open_their_own_catalogs(window):
     from PySide6.QtWidgets import QApplication
 

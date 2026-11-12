@@ -1061,6 +1061,9 @@ class MainWindow(QMainWindow):
         if subject not in LAB_SUBJECTS:
             return
         self.active_workspace = "experiments"
+        self.gce_subject = ""
+        self.gce_system_prompt = ""
+        self.gce_modes = []
         self.lab_subject = subject
         self.lab_screen = "gallery"
         self.lab_gallery_heading.setText(f"{subject} experiments")
