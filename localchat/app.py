@@ -153,6 +153,29 @@ def build_stylesheet() -> str:
         background: rgba(16, 68, 59, 0.95);
     }
 
+    #windowControlButton {
+        background: rgba(9, 31, 28, 0.96);
+        border: 1px solid rgba(89, 201, 178, 0.38);
+        border-radius: 8px;
+        color: #dffdf1;
+        min-width: 28px;
+        max-width: 28px;
+        min-height: 28px;
+        max-height: 28px;
+        padding: 0;
+        font-size: 15px;
+        font-weight: 800;
+    }
+
+    #windowControlButton:hover {
+        background: rgba(17, 69, 58, 0.98);
+        border-color: rgba(137, 248, 206, 0.72);
+    }
+
+    #windowControlButton[variant="close"] {
+        color: #ffb5ac;
+    }
+
     #studyCard {
         background: rgba(7, 31, 26, 0.92);
         border: 1px solid rgba(75, 186, 153, 0.42);
@@ -737,6 +760,15 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Fuserio")
         self.resize(1440, 900)
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.CustomizeWindowHint
+            | Qt.WindowTitleHint
+            | Qt.WindowSystemMenuHint
+            | Qt.WindowMinimizeButtonHint
+            | Qt.WindowMaximizeButtonHint
+            | Qt.WindowCloseButtonHint
+        )
         self.setStyleSheet(build_stylesheet())
         self.logo_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -974,11 +1006,38 @@ class MainWindow(QMainWindow):
 
         self.model_info = QLabel("Select a local model below")
         self.model_info.setObjectName("modelInfo")
-        header_layout.addWidget(self.model_info)
 
         self.connection_status = QLabel("CONNECTING")
         self.connection_status.setObjectName("statPill")
+
+        self.window_controls = QWidget()
+        self.window_controls.setObjectName("windowControls")
+        window_controls_layout = QHBoxLayout(self.window_controls)
+        window_controls_layout.setContentsMargins(0, 0, 0, 0)
+        window_controls_layout.setSpacing(8)
+
+        self.window_minimize_button = QPushButton("—")
+        self.window_minimize_button.setObjectName("windowControlButton")
+        self.window_minimize_button.setToolTip("Minimize")
+        self.window_minimize_button.clicked.connect(self.showMinimized)
+        window_controls_layout.addWidget(self.window_minimize_button)
+
+        self.window_maximize_button = QPushButton("▢")
+        self.window_maximize_button.setObjectName("windowControlButton")
+        self.window_maximize_button.setToolTip("Maximize")
+        self.window_maximize_button.clicked.connect(self._toggle_window_maximize)
+        window_controls_layout.addWidget(self.window_maximize_button)
+
+        self.window_close_button = QPushButton("×")
+        self.window_close_button.setObjectName("windowControlButton")
+        self.window_close_button.setProperty("variant", "close")
+        self.window_close_button.setToolTip("Close")
+        self.window_close_button.clicked.connect(self.close)
+        window_controls_layout.addWidget(self.window_close_button)
+
+        header_layout.addWidget(self.model_info)
         header_layout.addWidget(self.connection_status)
+        header_layout.addWidget(self.window_controls)
 
         main_layout.addWidget(header)
 
@@ -1454,25 +1513,19 @@ class MainWindow(QMainWindow):
 
     def _build_math_analysis_page(self):
         self.math_analysis_page = QWidget()
-        page_layout = QVBoxLayout(self.math_analysis_page)
+        page_layout = QHBoxLayout(self.math_analysis_page)
         page_layout.setContentsMargins(0, 0, 0, 0)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.math_analysis_content = QWidget()
-        self.math_analysis_content.setMinimumWidth(0)
-        content_layout = QVBoxLayout(self.math_analysis_content)
-        content_layout.setContentsMargins(26, 22, 26, 24)
-        content_layout.setSpacing(12)
+        page_layout.setSpacing(0)
+
+        self.math_analysis_controls = QWidget()
+        self.math_analysis_controls.setObjectName("mathAnalysisLeft")
+        controls_layout = QVBoxLayout(self.math_analysis_controls)
+        controls_layout.setContentsMargins(18, 18, 12, 18)
+        controls_layout.setSpacing(10)
 
         title = QLabel("Math Data Lab")
         title.setObjectName("studyHeading")
-        subtitle = QLabel("Plot a function or analyze measured data. The graph and statistics update from your inputs.")
-        subtitle.setObjectName("studySubheading")
-        subtitle.setWordWrap(True)
-        content_layout.addWidget(title)
-        content_layout.addWidget(subtitle)
+        controls_layout.addWidget(title)
 
         mode_row = QHBoxLayout()
         mode_label = QLabel("ANALYSIS")
@@ -1483,7 +1536,21 @@ class MainWindow(QMainWindow):
         self.math_mode_selector.setAccessibleName("Choose function plotting or measured data analysis")
         mode_row.addWidget(self.math_mode_selector)
         mode_row.addStretch(1)
-        content_layout.addLayout(mode_row)
+        controls_layout.addLayout(mode_row)
+
+        quick_layout = QHBoxLayout()
+        for label, expression in (
+            ("Linear", "2*x + 1"),
+            ("Quadratic", "x**2 - 4*x + 3"),
+            ("Sine", "sin(x)"),
+            ("Exponential", "exp(x/3)"),
+        ):
+            button = QPushButton(label)
+            button.setObjectName("studyModeButton")
+            button.clicked.connect(lambda _checked=False, value=expression: self.math_function_edit.setText(value))
+            quick_layout.addWidget(button)
+        quick_layout.addStretch(1)
+        controls_layout.addLayout(quick_layout)
 
         self.math_function_row = QWidget()
         function_row_layout = QHBoxLayout(self.math_function_row)
@@ -1493,19 +1560,19 @@ class MainWindow(QMainWindow):
         function_row_layout.addWidget(function_label)
         self.math_function_edit = QLineEdit("x**2 - 4*x + 3")
         self.math_function_edit.setObjectName("mathFunctionInput")
-        self.math_function_edit.setPlaceholderText("For example: sin(x), x**2, or sqrt(x + 4)")
+        self.math_function_edit.setPlaceholderText("Type a formula like 2*x + 1 or sin(x)")
         self.math_function_edit.setAccessibleName("Function of x to plot")
         function_row_layout.addWidget(self.math_function_edit, 1)
-        content_layout.addWidget(self.math_function_row)
+        controls_layout.addWidget(self.math_function_row)
 
         self.math_data_edit = QTextEdit()
         self.math_data_edit.setObjectName("mathDataInput")
         self.math_data_edit.setAccessibleName("Measured x and y data")
-        self.math_data_edit.setPlaceholderText("Paste two columns, x and y, one pair per line")
+        self.math_data_edit.setPlaceholderText("Paste x,y pairs, one row per line")
         self.math_data_edit.setPlainText("x,y\n1,2.1\n2,3.9\n3,6.2\n4,7.8\n5,10.1")
         self.math_data_edit.setFixedHeight(112)
         self.math_data_edit.hide()
-        content_layout.addWidget(self.math_data_edit)
+        controls_layout.addWidget(self.math_data_edit)
 
         range_row = QHBoxLayout()
         self.math_x_min = QDoubleSpinBox()
@@ -1533,10 +1600,10 @@ class MainWindow(QMainWindow):
         range_row.addStretch(1)
         self.math_range_row = QWidget()
         self.math_range_row.setLayout(range_row)
-        content_layout.addWidget(self.math_range_row)
+        controls_layout.addWidget(self.math_range_row)
 
         action_row = QHBoxLayout()
-        self.math_plot_button = QPushButton("Plot and analyze")
+        self.math_plot_button = QPushButton("Plot")
         self.math_plot_button.setObjectName("sendButton")
         self.math_plot_button.clicked.connect(self._run_math_analysis)
         action_row.addWidget(self.math_plot_button)
@@ -1545,57 +1612,86 @@ class MainWindow(QMainWindow):
         self.math_explain_button.clicked.connect(self._explain_math_analysis)
         action_row.addWidget(self.math_explain_button)
         action_row.addStretch(1)
-        content_layout.addLayout(action_row)
+        controls_layout.addLayout(action_row)
 
-        self.math_status = QLabel("Ready. Enter a function or measured data to begin.")
+        self.math_status = QLabel("Ready. Choose a preset or type an equation to plot.")
         self.math_status.setObjectName("labModelNote")
         self.math_status.setWordWrap(True)
-        content_layout.addWidget(self.math_status)
+        controls_layout.addWidget(self.math_status)
+
+        self.math_analysis_workspace = QWidget()
+        self.math_analysis_workspace.setObjectName("mathAnalysisRight")
+        workspace_layout = QVBoxLayout(self.math_analysis_workspace)
+        workspace_layout.setContentsMargins(12, 18, 18, 18)
+        workspace_layout.setSpacing(10)
 
         self.math_plot_view = PlotPreview()
-        content_layout.addWidget(self.math_plot_view, 1)
+        workspace_layout.addWidget(self.math_plot_view, 3)
 
-        metrics_heading = QLabel("ANALYSIS RESULTS")
-        metrics_heading.setObjectName("labControlLabel")
-        content_layout.addWidget(metrics_heading)
         self.math_results_view = QTextBrowser()
         self.math_results_view.setObjectName("mathResults")
         self.math_results_view.setReadOnly(True)
-        self.math_results_view.setMinimumHeight(155)
+        self.math_results_view.setMinimumHeight(140)
         self.math_results_view.setMaximumHeight(220)
-        content_layout.addWidget(self.math_results_view)
+        workspace_layout.addWidget(self.math_results_view)
 
-        explanation_heading = QLabel("TUTOR EXPLANATION")
-        explanation_heading.setObjectName("labControlLabel")
-        content_layout.addWidget(explanation_heading)
+        question_header = QLabel("Tutor Q&A")
+        question_header.setObjectName("labControlLabel")
+        workspace_layout.addWidget(question_header)
+
+        question_row = QHBoxLayout()
+        self.math_question_input = QLineEdit()
+        self.math_question_input.setObjectName("searchBox")
+        self.math_question_input.setPlaceholderText("Ask the tutor about this graph, pattern, or next step...")
+        self.math_question_input.setClearButtonEnabled(True)
+        self.math_question_input.returnPressed.connect(self._ask_math_follow_up)
+        question_row.addWidget(self.math_question_input, 1)
+        self.math_question_button = QPushButton("Ask")
+        self.math_question_button.setObjectName("studyModeButton")
+        self.math_question_button.clicked.connect(self._ask_math_follow_up)
+        question_row.addWidget(self.math_question_button)
+        workspace_layout.addLayout(question_row)
+
         self.math_explanation_view = QTextBrowser()
         self.math_explanation_view.setObjectName("mathExplanation")
         self.math_explanation_view.setReadOnly(True)
-        self.math_explanation_view.setMinimumHeight(220)
-        content_layout.addWidget(self.math_explanation_view)
-        content_layout.addStretch(1)
+        self.math_explanation_view.setMinimumHeight(180)
+        workspace_layout.addWidget(self.math_explanation_view, 1)
 
-        scroll.setWidget(self.math_analysis_content)
-        page_layout.addWidget(scroll)
+        self.math_live_timer = QTimer(self)
+        self.math_live_timer.setSingleShot(True)
+        self.math_live_timer.setInterval(250)
+        self.math_live_timer.timeout.connect(self._run_math_analysis)
+        self.math_function_edit.textChanged.connect(self._schedule_live_math_plot)
+        self.math_data_edit.textChanged.connect(self._schedule_live_math_plot)
+        self.math_x_min.valueChanged.connect(self._schedule_live_math_plot)
+        self.math_x_max.valueChanged.connect(self._schedule_live_math_plot)
+        self.math_samples.valueChanged.connect(self._schedule_live_math_plot)
         self.math_mode_selector.currentIndexChanged.connect(self._set_math_input_mode)
+
+        page_layout.addWidget(self.math_analysis_controls, 2)
+        page_layout.addWidget(self.math_analysis_workspace, 5)
         self.content_stack.addWidget(self.math_analysis_page)
 
-    def open_math_analysis(self):
-        self.active_workspace = "math"
-        self.gce_subject = ""
-        self.gce_system_prompt = ""
-        self.gce_modes = []
-        self.study_context_label.hide()
-        self.mode_bar.hide()
-        self.back_button.show()
-        self.content_stack.setCurrentWidget(self.math_analysis_page)
+    def _toggle_window_maximize(self):
+        if self.isMaximized():
+            self.showNormal()
+            self.window_maximize_button.setToolTip("Maximize")
+        else:
+            self.showMaximized()
+            self.window_maximize_button.setToolTip("Restore")
+
+    def _schedule_live_math_plot(self):
+        if self.math_analysis_page.isVisible():
+            self.math_live_timer.start()
 
     def _set_math_input_mode(self, index: int):
         measured_data = index == 1
         self.math_function_row.setVisible(not measured_data)
         self.math_range_row.setVisible(not measured_data)
         self.math_data_edit.setVisible(measured_data)
-        self.math_plot_button.setText("Analyze data" if measured_data else "Plot and analyze")
+        self.math_plot_button.setText("Analyze data" if measured_data else "Plot")
+        self._schedule_live_math_plot()
 
     def _run_math_analysis(self):
         try:
@@ -1615,10 +1711,20 @@ class MainWindow(QMainWindow):
         self.math_analysis_result = result
         self.math_plot_view.set_plot_png(result.plot_png)
         self.math_results_view.setHtml(self._math_results_html(result))
-        self.math_status.setText(f"Analysis complete. {len(result.x_values)} points plotted.")
+        self.math_status.setText(f"Analysis ready. {len(result.x_values)} points plotted.")
         self.math_explanation_content = ""
         self._render_math_explanation("Press Explain with tutor for a step-by-step interpretation.")
         return True
+
+    def open_math_analysis(self):
+        self.active_workspace = "math"
+        self.gce_subject = ""
+        self.gce_system_prompt = ""
+        self.gce_modes = []
+        self.study_context_label.hide()
+        self.mode_bar.hide()
+        self.back_button.show()
+        self.content_stack.setCurrentWidget(self.math_analysis_page)
 
     @staticmethod
     def _math_results_html(result: AnalysisResult) -> str:
@@ -1673,6 +1779,40 @@ class MainWindow(QMainWindow):
             "<html><body style='background:#091713;color:#e5f5ec;"
             "font-family:DejaVu Sans,sans-serif;font-size:13px;line-height:1.55;'>"
             f"{body}</body></html>"
+        )
+
+    def _ask_math_follow_up(self):
+        question = self.math_question_input.text().strip()
+        if not question:
+            return
+        if self.math_analysis_result is None:
+            self.math_status.setText("Plot an equation or dataset before asking a follow-up question.")
+            return
+        if not self.base_url:
+            self.statusBar().showMessage("Connect a local model before asking follow-up questions.")
+            return
+        if self.chat_worker and self.chat_worker.isRunning():
+            self.statusBar().showMessage("The current tutor answer is still running. Please wait a moment.")
+            return
+        result = self.math_analysis_result
+        followup_prompt = "\n".join((
+            "You are tutoring a student about a plotted mathematical relationship.",
+            "Answer the follow-up question with direct, concrete reasoning tied to the current graph and summary statistics.",
+            f"Current source: {result.source}",
+            f"Current metrics: {result.metrics}",
+            f"Current summary: {result.summary}",
+            f"Student question: {question}",
+        ))
+        self.math_analysis_active = True
+        self.math_explanation_content += f"\n\n**Student question:** {question}\n"
+        self._render_math_explanation()
+        self.math_question_input.clear()
+        self._start_chat_request(
+            [
+                {"role": "system", "content": followup_prompt},
+                {"role": "user", "content": question},
+            ],
+            analysis_panel=True,
         )
 
     def _animate_menu_widget(self, widget: QWidget, expanded: bool):

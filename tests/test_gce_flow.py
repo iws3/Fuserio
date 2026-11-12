@@ -100,6 +100,9 @@ def test_startup_offers_levels_and_sidebar_links_switch_workspaces(window):
     assert window.gce_study_button.text() == "GCE Learning"
     assert window.ai_workspace_button.text() == "AI Workspace"
     assert not window.findChild(QLabel, "startLogo").pixmap().isNull()
+    assert hasattr(window, "window_minimize_button")
+    assert hasattr(window, "window_maximize_button")
+    assert hasattr(window, "window_close_button")
 
     window.ai_workspace_button.click()
     assert window.content_stack.currentWidget() is window.chat_page
@@ -268,6 +271,7 @@ def test_math_lab_tutor_explains_computed_values_in_its_own_panel(window):
     window.open_math_analysis()
     window.math_function_edit.setText("2*x + 1")
     window.math_plot_button.click()
+    assert window.math_question_input.placeholderText().startswith("Ask the tutor")
     window.math_explain_button.click()
 
     tutor_request = FakeChatWorker.instances[-1].messages
