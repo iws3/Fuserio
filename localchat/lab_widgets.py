@@ -29,6 +29,7 @@ class LabCanvas(QWidget):
         self.parameters: dict[str, int] = {}
         self.elapsed = 0.0
         self.running = False
+        self.playback_rate = 1.0
         self.timer = QTimer(self)
         self.timer.setInterval(33)
         self.timer.timeout.connect(self._tick)
@@ -62,13 +63,22 @@ class LabCanvas(QWidget):
         self.timer.stop()
         self.update()
 
+    def set_playback_rate(self, rate: float):
+        self.playback_rate = max(0.25, min(float(rate), 2.0))
+
+    def step(self, seconds: float = 1 / 30):
+        if self.running:
+            return
+        self.elapsed += max(0.0, seconds) * self.playback_rate
+        self.update()
+
     def reset(self):
         self.elapsed = 0.0
         self.pause()
         self.update()
 
     def _tick(self):
-        self.elapsed += 1 / 30
+        self.elapsed += self.playback_rate / 30
         self.update()
 
     def measurements(self) -> dict[str, str]:

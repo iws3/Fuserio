@@ -58,3 +58,23 @@ def test_canvas_play_pause_reset_controls_animation_clock():
     assert not canvas.timer.isActive()
     canvas.reset()
     assert canvas.elapsed == 0
+
+
+def test_canvas_single_step_and_playback_rate_are_bounded():
+    app()
+    canvas = LabCanvas()
+    canvas.set_experiment(EXPERIMENTS[0])
+    canvas.set_playback_rate(1.5)
+    canvas.step()
+    assert canvas.elapsed == 0.05
+
+    canvas.set_playback_rate(9)
+    assert canvas.playback_rate == 2.0
+    canvas.set_playback_rate(0)
+    assert canvas.playback_rate == 0.25
+
+    canvas.play()
+    current_time = canvas.elapsed
+    canvas.step()
+    assert canvas.elapsed == current_time
+    canvas.pause()

@@ -149,6 +149,13 @@ def test_experiment_sidebar_opens_subject_gallery_and_live_simulation(window):
     speed_slider.setValue(35)
     assert window.lab_canvas.measurements()["RANGE"] != initial_range
 
+    initial_time = window.lab_canvas.elapsed
+    window.lab_step_button.click()
+    assert window.lab_canvas.elapsed > initial_time
+    window.lab_speed_slider.setValue(150)
+    assert window.lab_canvas.playback_rate == 1.5
+    assert window.lab_speed_value.text() == "1.50×"
+
     window.navigate_back()
     assert window.content_stack.currentWidget() is window.lab_gallery_page
     window.navigate_back()

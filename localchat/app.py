@@ -931,7 +931,24 @@ class MainWindow(QMainWindow):
         self.lab_reset_button.setObjectName("studyModeButton")
         self.lab_reset_button.clicked.connect(self._reset_lab_simulation)
         toolbar_layout.addWidget(self.lab_reset_button)
+        self.lab_step_button = QPushButton("Step →")
+        self.lab_step_button.setObjectName("studyModeButton")
+        self.lab_step_button.clicked.connect(self._step_lab_simulation)
+        toolbar_layout.addWidget(self.lab_step_button)
         toolbar_layout.addStretch(1)
+        speed_label = QLabel("SPEED")
+        speed_label.setObjectName("labControlLabel")
+        toolbar_layout.addWidget(speed_label)
+        self.lab_speed_slider = QSlider(Qt.Horizontal)
+        self.lab_speed_slider.setRange(25, 200)
+        self.lab_speed_slider.setValue(100)
+        self.lab_speed_slider.setFixedWidth(110)
+        self.lab_speed_slider.setAccessibleName("Simulation playback speed")
+        self.lab_speed_slider.valueChanged.connect(self._set_lab_speed)
+        toolbar_layout.addWidget(self.lab_speed_slider)
+        self.lab_speed_value = QLabel("1.00×")
+        self.lab_speed_value.setObjectName("labControlValue")
+        toolbar_layout.addWidget(self.lab_speed_value)
         self.lab_detail_layout.addWidget(self.lab_toolbar)
 
         self.lab_metrics_row = QWidget()
@@ -1001,6 +1018,7 @@ class MainWindow(QMainWindow):
         self.lab_objective.setText(f"<b>INVESTIGATE</b>  {html.escape(experiment.objective)}")
         self.lab_safety.setText(f"<b>SAFETY NOTE</b>  {html.escape(experiment.safety)}")
         self.lab_canvas.set_experiment(experiment)
+        self.lab_canvas.set_playback_rate(self.lab_speed_slider.value() / 100)
         self._build_lab_controls(experiment)
         self._update_lab_metrics()
         self.lab_play_button.setText("▶  Run simulation")
@@ -1076,6 +1094,15 @@ class MainWindow(QMainWindow):
         self.lab_canvas.reset()
         self.lab_play_button.setText("▶  Run simulation")
         self._update_lab_metrics()
+
+    def _step_lab_simulation(self):
+        self.lab_canvas.step()
+        self._update_lab_metrics()
+
+    def _set_lab_speed(self, value: int):
+        rate = value / 100
+        self.lab_canvas.set_playback_rate(rate)
+        self.lab_speed_value.setText(f"{rate:.2f}×")
 
     def _selection_page(self, heading: str, subheading: str) -> QWidget:
         page = QWidget()
