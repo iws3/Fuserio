@@ -1,8 +1,12 @@
 from localchat.lab_data import (
     EXPERIMENTS,
+    MODEL_EQUATIONS,
+    MODEL_LIMITATIONS,
     SUBJECTS,
     experiment_by_id,
     experiments_for_subject,
+    model_equation,
+    model_limitation,
 )
 
 
@@ -27,3 +31,12 @@ def test_experiment_lookup_and_subject_filter_are_consistent():
     assert pendulum.subject == "Physics"
     assert pendulum in experiments_for_subject("Physics")
     assert experiment_by_id("unknown-lab") is None
+
+
+def test_each_experiment_has_a_relationship_and_limit_note():
+    identifiers = {experiment.identifier for experiment in EXPERIMENTS}
+
+    assert set(MODEL_EQUATIONS) == identifiers
+    assert set(MODEL_LIMITATIONS) == identifiers
+    assert all(model_equation(identifier) for identifier in identifiers)
+    assert all(model_limitation(identifier) for identifier in identifiers)

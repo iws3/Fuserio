@@ -39,7 +39,13 @@ from localchat.gce import (
     suggested_topic_areas,
 )
 from localchat.models import MODEL_OPTIONS, model_option
-from localchat.lab_data import SUBJECTS as LAB_SUBJECTS, experiment_by_id, experiments_for_subject
+from localchat.lab_data import (
+    SUBJECTS as LAB_SUBJECTS,
+    experiment_by_id,
+    experiments_for_subject,
+    model_equation,
+    model_limitation,
+)
 from localchat.lab_widgets import LabCanvas
 
 
@@ -271,6 +277,21 @@ def build_stylesheet() -> str:
         border: 1px solid #65502d;
         border-radius: 8px;
         padding: 10px 12px;
+    }
+
+    #labEquation {
+        background: #091713;
+        border: 1px solid #204837;
+        border-radius: 8px;
+        color: #b7f4d0;
+        padding: 5px 9px;
+        font-family: serif;
+        font-size: 15px;
+    }
+
+    #labModelNote {
+        color: #87a596;
+        font-size: 10px;
     }
 
     QListWidget {
@@ -976,6 +997,20 @@ class MainWindow(QMainWindow):
         self.lab_objective.setObjectName("studySubheading")
         self.lab_detail_layout.addWidget(self.lab_objective)
 
+        equation_label = QLabel("MODEL RELATIONSHIP")
+        equation_label.setObjectName("labControlLabel")
+        self.lab_detail_layout.addWidget(equation_label)
+        self.lab_equation = QTextBrowser()
+        self.lab_equation.setObjectName("labEquation")
+        self.lab_equation.setReadOnly(True)
+        self.lab_equation.setOpenExternalLinks(False)
+        self.lab_equation.setFixedHeight(58)
+        self.lab_detail_layout.addWidget(self.lab_equation)
+        self.lab_model_note = QLabel("")
+        self.lab_model_note.setObjectName("labModelNote")
+        self.lab_model_note.setWordWrap(True)
+        self.lab_detail_layout.addWidget(self.lab_model_note)
+
         prediction_label = QLabel("MAKE A PREDICTION")
         prediction_label.setObjectName("labControlLabel")
         self.lab_detail_layout.addWidget(prediction_label)
@@ -1045,6 +1080,8 @@ class MainWindow(QMainWindow):
         self.lab_detail_title.setText(experiment.title)
         self.lab_detail_subtitle.setText(f"{experiment.subject.upper()}  /  VIRTUAL PRE-LAB  /  {experiment.subtitle}")
         self.lab_objective.setText(f"<b>INVESTIGATE</b>  {html.escape(experiment.objective)}")
+        self.lab_equation.setHtml(self._format_message_content(model_equation(identifier)))
+        self.lab_model_note.setText(f"MODEL LIMIT  /  {html.escape(model_limitation(identifier))}")
         self.lab_safety.setText(f"<b>SAFETY NOTE</b>  {html.escape(experiment.safety)}")
         self.lab_canvas.set_experiment(experiment)
         self.lab_canvas.set_playback_rate(self.lab_speed_slider.value() / 100)

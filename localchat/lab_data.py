@@ -148,6 +148,30 @@ EXPERIMENTS = (
 
 SUBJECTS = ("Physics", "Biology", "Chemistry")
 
+MODEL_EQUATIONS = {
+    "projectile-motion": r"$x = u\cos\theta\,t$  ·  $y = u\sin\theta\,t - \frac{1}{2}gt^2$",
+    "pendulum-lab": r"$T \approx 2\pi\sqrt{\frac{L}{g}}$  ·  small-angle model",
+    "ohms-law": r"$V = IR$  ·  $P = VI$",
+    "diffusion": r"$J = -D\,\frac{\Delta C}{\Delta x}$  ·  concentration gradient",
+    "enzyme-activity": r"$\text{rate} \propto [E]$  ·  simplified temperature response",
+    "natural-selection": r"$p_{n+1}$ depends on trait fitness and $p_n$  ·  population model",
+    "reaction-rate": r"$\text{rate} \propto$ effective collision frequency",
+    "titration": r"$\text{pH} = -\log_{10}[H^+]$  ·  indicator changes near the endpoint",
+    "particle-states": r"$\overline{E_k} \propto T$  ·  particle motion model",
+}
+
+MODEL_LIMITATIONS = {
+    "projectile-motion": "Assumes a level launch and landing, constant gravity, and no air resistance.",
+    "pendulum-lab": "The displayed period formula is an approximation for small angles; damping is illustrative.",
+    "ohms-law": "Assumes a steady ideal circuit and an ohmic resistor whose resistance does not heat up.",
+    "diffusion": "Uses a simplified concentration-gradient model; real membranes have selective transport and active processes.",
+    "enzyme-activity": "Shows a simplified optimum curve; actual enzymes have different optimum conditions and kinetics.",
+    "natural-selection": "Illustrates one trait under selection; real populations have many interacting traits and forces.",
+    "reaction-rate": "Collision dots are illustrative; the model does not resolve molecular structure or activation energy distributions.",
+    "titration": "Uses an illustrative endpoint curve; accurate pH depends on the actual acid, base, and concentrations.",
+    "particle-states": "Particles are not to scale and the drawing simplifies real intermolecular forces and motion.",
+}
+
 
 def experiments_for_subject(subject: str) -> tuple[Experiment, ...]:
     return tuple(experiment for experiment in EXPERIMENTS if experiment.subject == subject)
@@ -155,3 +179,11 @@ def experiments_for_subject(subject: str) -> tuple[Experiment, ...]:
 
 def experiment_by_id(identifier: str) -> Experiment | None:
     return next((experiment for experiment in EXPERIMENTS if experiment.identifier == identifier), None)
+
+
+def model_equation(identifier: str) -> str:
+    return MODEL_EQUATIONS.get(identifier, "Qualitative model; compare variables and observed trends.")
+
+
+def model_limitation(identifier: str) -> str:
+    return MODEL_LIMITATIONS.get(identifier, "This is a simplified model, not an exact measurement of a real experiment.")

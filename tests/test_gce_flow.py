@@ -140,6 +140,8 @@ def test_experiment_sidebar_opens_subject_gallery_and_live_simulation(window):
     assert window.content_stack.currentWidget() is window.lab_detail_page
     assert window.lab_canvas.experiment.identifier == "projectile-motion"
     assert window.lab_metric_labels
+    assert "u" in window.lab_equation.toPlainText()
+    assert "air resistance" in window.lab_model_note.text().lower()
 
     initial_range = window.lab_canvas.measurements()["RANGE"]
     speed_slider = next(
