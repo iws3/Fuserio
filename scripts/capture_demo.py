@@ -115,6 +115,18 @@ def capture_frames(frame_directory: Path) -> list[Path]:
     window.messages[-1]["streaming"] = False
     window._render_messages()
     capture("04-tutor-chat")
+
+    window.lab_subject_buttons["Physics"].click()
+    for _ in range(round(1.8 / TOKEN_INTERVAL)):
+        capture("06-physics-lab")
+    window.open_experiment("projectile-motion")
+    for _ in range(round(1.5 / TOKEN_INTERVAL)):
+        capture("07-projectile-lab")
+    window._toggle_lab_simulation()
+    for frame_index in range(16):
+        window.lab_canvas._tick()
+        capture(f"08-projectile-frame-{frame_index:02d}")
+    window.lab_canvas.pause()
     window.close()
     application.processEvents()
     return frames

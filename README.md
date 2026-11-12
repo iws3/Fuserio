@@ -2,11 +2,11 @@
 
 **Your private local AI workspace and Cameroon GCE study tutor.** Fuserio runs as a desktop app and connects to llama.cpp on your computer.
 
-![Animated Fuserio walkthrough: choose a GCE level, stream, and subject, then watch a worked Physics answer appear token by token](assets/fuserio-demo.gif)
+![Animated Fuserio walkthrough: choose a GCE level, see a Physics tutor answer stream, and play a projectile-motion lab](assets/fuserio-demo.gif)
 
 [Download the MP4 version](assets/fuserio-demo.mp4)
 
-The demo shows the GCE flow and a Physics answer being generated progressively in the chat, with a live token counter. It uses sample messages and does not need or start an AI model.
+The demo shows the GCE flow, a Physics answer being generated progressively with a live token counter, and a running projectile-motion experiment. It uses sample content and does not need or start an AI model.
 
 ## Get Started
 
