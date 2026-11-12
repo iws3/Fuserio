@@ -107,6 +107,19 @@ def test_startup_offers_levels_and_sidebar_links_switch_workspaces(window):
     assert window.content_stack.currentWidget() is window.level_page
 
 
+def test_chat_remains_a_normal_full_workspace_page(window):
+    from PySide6.QtWidgets import QApplication
+
+    window.resize(1600, 900)
+    window.show()
+    window.open_ai_workspace()
+    QApplication.processEvents()
+
+    assert window.content_stack.currentWidget() is window.chat_page
+    assert window.chat_page.width() == window.content_stack.width()
+    assert window.chat_page.height() == window.content_stack.height()
+
+
 def test_model_retry_reuses_compatible_server(window):
     window.model_reconnect_button.setEnabled(True)
     window.model_reconnect_button.click()
@@ -132,13 +145,14 @@ def test_experiment_sidebar_opens_subject_gallery_and_live_simulation(window):
     assert window.active_workspace == "experiments"
     assert window.lab_subject == "Physics"
     assert window.content_stack.currentWidget() is window.lab_gallery_page
-    assert window.lab_gallery_grid.count() == 3
+    assert window.lab_gallery_grid.count() == 4
 
     first_experiment = window.lab_gallery_grid.itemAt(0).widget()
     assert isinstance(first_experiment, QPushButton)
     first_experiment.click()
     assert window.content_stack.currentWidget() is window.lab_detail_page
     assert window.lab_canvas.experiment.identifier == "projectile-motion"
+    assert window.lab_canvas.running
     assert window.lab_metric_labels
     assert "u" in window.lab_equation.toPlainText()
     assert "air resistance" in window.lab_model_note.text().lower()
@@ -152,6 +166,7 @@ def test_experiment_sidebar_opens_subject_gallery_and_live_simulation(window):
     assert window.lab_canvas.measurements()["RANGE"] != initial_range
 
     initial_time = window.lab_canvas.elapsed
+    window.lab_play_button.click()
     window.lab_step_button.click()
     assert window.lab_canvas.elapsed > initial_time
     window.lab_speed_slider.setValue(150)
@@ -192,12 +207,92 @@ def test_biology_and_chemistry_sidebar_subjects_open_their_own_catalogs(window):
 
     window.lab_subject_buttons["Chemistry"].click()
     QApplication.processEvents()
-    chemistry_titles = {
-        window.lab_gallery_grid.itemAt(index).widget().text().split("\n", 1)[0]
-        for index in range(window.lab_gallery_grid.count())
-    }
-    assert chemistry_titles == {"Reaction rate", "Acid-base titration", "States of matter"}
+    assert window.chemistry_practicals_open
+    assert not window.chemistry_practical_nav.isHidden()
+    assert set(window.chemistry_level_navs) == {"o-level", "a-level"}
     assert all(not card.isVisible() for card in biology_cards)
+
+
+def test_chemistry_practical_cards_stay_inside_narrow_scroll_viewport(window):
+    from PySide6.QtWidgets import QApplication
+
+    window.resize(390, 850)
+    window.show()
+    window.lab_subject_buttons["Chemistry"].click()
+    window._select_chemistry_level("o-level")
+    window._select_chemistry_topic("o-level", 4)
+    QApplication.processEvents()
+
+    viewport = window.chemistry_practical_scroll.viewport()
+    cards = [
+        window.chemistry_practical_grid.itemAt(index).widget()
+        for index in range(window.chemistry_practical_grid.count())
+    ]
+    assert cards
+    assert window.width() <= 450
+    assert window.sidebar.isHidden()
+    assert window.mobile_menu_button.isVisible()
+    assert viewport.width() < 400
+    assert all(card.x() + card.width() <= viewport.width() for card in cards)
+    available_width = viewport.width() - 8
+    max_columns = 1 if available_width < 600 else max(2, min(4, available_width // 270))
+    assert len({card.x() for card in cards}) <= max_columns
+
+
+def test_math_data_lab_plots_functions_and_analyzes_measured_data(window):
+    from PySide6.QtWidgets import QApplication
+
+    window.show()
+    window.math_lab_button.click()
+    assert window.content_stack.currentWidget() is window.math_analysis_page
+
+    window.math_function_edit.setText("2*x + 1")
+    window.math_x_min.setValue(0)
+    window.math_x_max.setValue(4)
+    window.math_plot_button.click()
+    QApplication.processEvents()
+    assert window.math_analysis_result is not None
+    assert window.math_analysis_result.metrics["BEST-FIT LINE"] == "y = 2x + 1"
+    assert window.math_plot_view.pixmap() is not None
+    assert not window.math_plot_view.pixmap().isNull()
+
+    window.math_mode_selector.setCurrentIndex(1)
+    window.math_data_edit.setPlainText("x,y\n1,3\n2,5\n3,7\n4,9")
+    window.math_plot_button.click()
+    assert window.math_analysis_result is not None
+    assert window.math_analysis_result.metrics["R SQUARED"] == "1.0000"
+
+
+def test_math_lab_tutor_explains_computed_values_in_its_own_panel(window):
+    window.show()
+    window.open_math_analysis()
+    window.math_function_edit.setText("2*x + 1")
+    window.math_plot_button.click()
+    window.math_explain_button.click()
+
+    tutor_request = FakeChatWorker.instances[-1].messages
+    assert "BEST-FIT LINE" in tutor_request[0]["content"]
+    assert "y = 2x + 1" in tutor_request[0]["content"]
+    assert window.math_analysis_active
+
+    window._append_stream_chunk("", "**Interpretation:** y rises by 2 units for each x unit.")
+    assert "font-weight:700" in window.math_explanation_view.toHtml()
+    assert "y rises by 2 units" in window.math_explanation_view.toHtml()
+    window._chat_finished()
+    assert not window.math_analysis_active
+
+
+def test_mobile_navigation_opens_a_chemistry_topic(window):
+    window.resize(390, 844)
+    window.show()
+    window._open_chemistry_topic_from_menu("a-level", 1)
+
+    assert window.width() <= 450
+    assert window.sidebar.isHidden()
+    assert window.chemistry_level_slug == "a-level"
+    assert window.chemistry_topic_number == 1
+    assert window.content_stack.currentWidget() is window.chemistry_practical_page
+    assert window.chemistry_route == "/chemistry/a-level/1"
 
 
 def test_experiment_tutor_receives_subject_readings_and_safety_context(window):
@@ -223,6 +318,105 @@ def test_experiment_tutor_receives_subject_readings_and_safety_context(window):
     assert window.lab_screen == "tutor"
     window.navigate_back()
     assert window.content_stack.currentWidget() is window.lab_detail_page
+
+
+def test_tutor_opens_full_height_right_panel_without_hiding_experiment(window):
+    from PySide6.QtWidgets import QApplication
+
+    window.show()
+    window.open_experiments_subject("Physics")
+    window.open_experiment("ohms-law")
+    window.ask_lab_tutor()
+    QApplication.processEvents()
+
+    assert window.lab_tutor_panel.isVisible()
+    assert window.lab_tutor_panel.parentWidget() is window.lab_detail_content
+    assert window.lab_detail_page.height() >= 700
+    assert window.lab_tutor_panel.height() >= window.lab_detail_page.height() * 0.75
+    assert not window.lab_canvas_shell.isHidden()
+    assert not window.lab_toolbar.isHidden()
+    assert not window.lab_controls_widget.isHidden()
+
+    window.lab_tutor_close_button.click()
+    assert not window.lab_tutor_panel.isVisible()
+    assert window.content_stack.currentWidget() is window.lab_detail_page
+
+
+def test_chemistry_playground_actions_are_shared_with_tutor(window):
+    from PySide6.QtWidgets import QPushButton
+
+    window.open_experiments_subject("Chemistry")
+    playground = next(
+        window.lab_gallery_grid.itemAt(index).widget()
+        for index in range(window.lab_gallery_grid.count())
+        if window.lab_gallery_grid.itemAt(index).widget().text().startswith("Chemistry playground")
+    )
+    playground.click()
+    tool_buttons = window.lab_controls_widget.findChildren(QPushButton)
+    next(button for button in tool_buttons if button.text().startswith("Add water")).click()
+    next(button for button in tool_buttons if button.text().startswith("Add salt")).click()
+
+    assert window.lab_canvas.measurements()["WATER"] == "25 mL"
+    window.ask_lab_tutor()
+
+    tutor_request = FakeChatWorker.instances[-1].messages
+    assert "WATER: 25 mL" in tutor_request[-1]["content"]
+    assert "water_ml': 25.0" in tutor_request[0]["content"]
+
+
+def test_lab_tutor_stream_renders_markdown_and_cleans_bad_glyphs(window):
+    window.lab_side_panel_active = True
+
+    window._append_stream_chunk("", "**SOLID-LIKE** at 0Â")
+    window._append_stream_chunk("", "°C �□")
+
+    rendered = window.lab_tutor_stream.toHtml()
+    assert "font-weight:700" in rendered
+    assert "SOLID-LIKE" in rendered
+    assert "**SOLID-LIKE**" not in rendered
+    assert "0 degrees C" in rendered
+    assert "�" not in rendered
+    assert "□" not in rendered
+
+
+def test_new_chat_button_opens_a_clean_chat_workspace(window):
+    window.open_experiments_subject("Physics")
+    window.messages = [{"role": "user", "content": "previous", "reasoning": ""}]
+    window.input.setPlainText("draft message")
+    window.gce_subject = "Physics"
+
+    window.new_chat_button.click()
+
+    assert window.active_workspace == "chat"
+    assert window.content_stack.currentWidget() is window.chat_page
+    assert window.messages == []
+    assert window.input.toPlainText() == ""
+    assert window.gce_subject == ""
+
+
+def test_experiment_gallery_reflows_cards_when_window_resizes(window):
+    from PySide6.QtWidgets import QApplication
+
+    window.resize(1500, 900)
+    window.show()
+    window.open_experiments_subject("Chemistry")
+    QApplication.processEvents()
+    card_count = window.lab_gallery_grid.count()
+    wide_columns = max(
+        window.lab_gallery_grid.getItemPosition(index)[1]
+        for index in range(card_count)
+    ) + 1
+
+    window.resize(820, 900)
+    QApplication.processEvents()
+    narrow_count = window.lab_gallery_grid.count()
+    narrow_columns = max(
+        window.lab_gallery_grid.getItemPosition(index)[1]
+        for index in range(narrow_count)
+    ) + 1
+
+    assert card_count == narrow_count == 5
+    assert narrow_columns <= wide_columns
 
 
 def test_experiment_predictions_and_observations_restore_per_experiment(window):

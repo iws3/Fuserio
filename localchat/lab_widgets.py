@@ -23,7 +23,7 @@ class LabCanvas(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(420, 300)
+        self.setMinimumSize(320, 300)
         self.setObjectName("labCanvas")
         self.setAccessibleName("Interactive science experiment simulation")
         self.experiment: Experiment | None = None
@@ -31,12 +31,14 @@ class LabCanvas(QWidget):
         self.elapsed = 0.0
         self.running = False
         self.playback_rate = 1.0
+        self.playground_items: dict[str, float | bool] = {}
         self.timer = QTimer(self)
         self.timer.setInterval(33)
         self.timer.timeout.connect(self._tick)
 
     def set_experiment(self, experiment: Experiment, parameters: dict[str, int] | None = None):
         self.experiment = experiment
+        self.playground_items = {}
         self.parameters = {
             parameter.key: parameter.value for parameter in experiment.parameters
         }
@@ -45,6 +47,38 @@ class LabCanvas(QWidget):
         self.elapsed = 0.0
         self.running = False
         self.timer.stop()
+        self.update()
+
+    def set_playground(self, experiment: Experiment):
+        self.set_experiment(experiment)
+        self.playground_items = {
+            "water_ml": 0.0,
+            "salt_g": 0.0,
+            "acid_ml": 0.0,
+            "base_ml": 0.0,
+            "stir_count": 0.0,
+            "battery": False,
+            "switch": False,
+            "wire": False,
+            "bulb": False,
+        }
+        self.play()
+
+    def add_playground_item(self, item: str):
+        if item == "water":
+            self.playground_items["water_ml"] = float(self.playground_items.get("water_ml", 0)) + 25
+        elif item == "salt":
+            self.playground_items["salt_g"] = float(self.playground_items.get("salt_g", 0)) + 5
+        elif item == "acid":
+            self.playground_items["acid_ml"] = float(self.playground_items.get("acid_ml", 0)) + 5
+        elif item == "base":
+            self.playground_items["base_ml"] = float(self.playground_items.get("base_ml", 0)) + 5
+        elif item == "stir":
+            self.playground_items["stir_count"] = float(self.playground_items.get("stir_count", 0)) + 1
+        elif item in {"battery", "wire", "bulb"}:
+            self.playground_items[item] = True
+        elif item == "switch":
+            self.playground_items["switch"] = not bool(self.playground_items.get("switch", False))
         self.update()
 
     def set_parameter(self, key: str, value: int):
@@ -85,6 +119,44 @@ class LabCanvas(QWidget):
     def measurements(self) -> dict[str, str]:
         experiment_id = self.experiment.identifier if self.experiment else ""
         p = self.parameters
+        if experiment_id == "chemistry-playground":
+            water = float(self.playground_items.get("water_ml", 0))
+            salt = float(self.playground_items.get("salt_g", 0))
+            dissolved = min(salt, water * 0.36)
+            acid_ml = float(self.playground_items.get("acid_ml", 0))
+            base_ml = float(self.playground_items.get("base_ml", 0))
+            total_volume = water + acid_ml + base_ml
+            excess = (acid_ml - base_ml) * 0.1 / 1000
+            if total_volume <= 0 or abs(excess) < 1e-12:
+                ph = 7.0
+            elif excess > 0:
+                ph = -math.log10(max(excess / (total_volume / 1000), 1e-14))
+            else:
+                ph = 14 + math.log10(max(-excess / (total_volume / 1000), 1e-14))
+            return {
+                "WATER": f"{water:.0f} mL",
+                "DISSOLVED SALT": f"{dissolved:.1f} g",
+                "SOLID LEFT": f"{max(0, salt - dissolved):.1f} g",
+                "MODEL pH": f"{max(0, min(14, ph)):.2f}",
+            }
+        if experiment_id == "circuit-playground":
+            complete = all(bool(self.playground_items.get(part, False)) for part in ("battery", "wire", "bulb", "switch"))
+            return {
+                "BATTERY": "9 V" if self.playground_items.get("battery") else "Not added",
+                "SWITCH": "Closed" if self.playground_items.get("switch") else "Open",
+                "CURRENT": "0.30 A" if complete else "0.00 A",
+                "BULB": "Lit" if complete else "Off",
+            }
+        if experiment_id == "salt-solubility":
+            water = p.get("water", 100)
+            salt = p.get("salt", 20)
+            temperature = p.get("temperature", 20)
+            dissolved = min(salt, water * (0.32 + temperature * 0.0007))
+            return {
+                "WATER": f"{water} mL",
+                "DISSOLVED": f"{dissolved:.1f} g",
+                "SOLID LEFT": f"{max(0, salt - dissolved):.1f} g",
+            }
         if experiment_id == "projectile-motion":
             angle = math.radians(p.get("angle", 45))
             speed = p.get("speed", 25)
@@ -145,6 +217,16 @@ class LabCanvas(QWidget):
         self._draw_grid(painter, bounds)
         if not self.experiment:
             self._draw_empty(painter, bounds)
+            painter.end()
+            return
+        if self.experiment.identifier == "chemistry-playground":
+            self._draw_chemistry_playground(painter, bounds)
+            self._draw_overlay(painter, bounds)
+            painter.end()
+            return
+        if self.experiment.identifier == "circuit-playground":
+            self._draw_circuit_playground(painter, bounds)
+            self._draw_overlay(painter, bounds)
             painter.end()
             return
         draw_method = getattr(
@@ -353,10 +435,18 @@ class LabCanvas(QWidget):
         color = QColor(*indicator_color(indicator, ph))
         fill_height = beaker.height() * min(0.9, 0.22 + (volume / 50.0) * 0.92)
         liquid = QRectF(beaker.left() + 4, beaker.bottom() - fill_height, beaker.width() - 8, fill_height - 4)
-        painter.setPen(QPen(QColor("#93b7a9"), 2))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#0b211e"))
+        painter.drawRoundedRect(beaker.adjusted(7, 7, 7, 9), 10, 10)
+        painter.setBrush(color)
+        painter.drawRoundedRect(liquid, 5, 5)
+        painter.setBrush(QColor(color.red(), color.green(), color.blue(), 100))
+        painter.drawEllipse(QRectF(liquid.left(), liquid.top() - 6, liquid.width(), 16))
         painter.setBrush(Qt.NoBrush)
-        painter.drawRoundedRect(beaker, 4, 4)
-        painter.fillRect(liquid, color)
+        painter.setPen(QPen(QColor("#93b7a9"), 2))
+        painter.drawRoundedRect(beaker, 9, 9)
+        painter.setPen(QPen(QColor(229, 255, 245, 110), 3))
+        painter.drawLine(QPointF(beaker.left() + 14, beaker.top() + 15), QPointF(beaker.left() + 14, beaker.bottom() - 22))
         burette = QRectF(center + 105, 50, 25, bounds.height() * 0.48)
         painter.setPen(QPen(CYAN, 2))
         painter.drawRoundedRect(burette, 4, 4)
@@ -370,6 +460,123 @@ class LabCanvas(QWidget):
             painter.drawEllipse(QPointF(center + 117, 235 + volume * 1.1), 3, 5)
         self._caption(painter, f"{indicator.upper()}  ·  {flavor.label}", 22, bounds.height() - 18, AMBER)
         self._caption(painter, f"pH {ph:.2f}", center - 10, 90, TEXT)
+
+    def _draw_chemistry_playground(self, painter: QPainter, bounds):
+        water = float(self.playground_items.get("water_ml", 0))
+        salt = float(self.playground_items.get("salt_g", 0))
+        acid = float(self.playground_items.get("acid_ml", 0))
+        base = float(self.playground_items.get("base_ml", 0))
+        dissolved = min(salt, water * 0.36)
+        beaker = QRectF(bounds.width() * 0.34, bounds.height() * 0.29, bounds.width() * 0.30, bounds.height() * 0.54)
+        bench_y = bounds.height() * 0.87
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#102c25"))
+        painter.drawRoundedRect(QRectF(28, bench_y, bounds.width() - 56, 20), 8, 8)
+        painter.setBrush(QColor("#071a16"))
+        painter.drawRoundedRect(QRectF(beaker.left() + 7, beaker.top() + 9, beaker.width(), beaker.height()), 12, 12)
+        liquid_height = min(beaker.height() * 0.68, water * 0.0019 * beaker.height())
+        liquid = QRectF(beaker.left() + 5, beaker.bottom() - liquid_height, beaker.width() - 10, liquid_height)
+        if water:
+            painter.setBrush(QColor("#3d9d9a"))
+            painter.drawRoundedRect(liquid, 8, 8)
+            painter.setBrush(QColor(121, 229, 215, 155))
+            painter.drawEllipse(QRectF(liquid.left(), liquid.top() - 5, liquid.width(), 14))
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor("#b7dfd1"), 3))
+        painter.drawRoundedRect(beaker, 11, 11)
+        painter.setPen(QPen(QColor(228, 255, 245, 120), 3))
+        painter.drawLine(QPointF(beaker.left() + 15, beaker.top() + 18), QPointF(beaker.left() + 15, beaker.bottom() - 18))
+        for index in range(int(dissolved * 2)):
+            phase = self.elapsed * 2.4 if self.running else 0
+            x = beaker.left() + 20 + (index * 31 % max(int(beaker.width() - 40), 1))
+            y = liquid.top() + 12 + ((index * 23 + int(phase * 9)) % max(int(liquid.height() - 18), 1)) if water and liquid.height() > 20 else beaker.bottom() - 18
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor("#f6e4a0"))
+            painter.drawEllipse(QPointF(x, y), 3, 3)
+        solid_count = min(20, int(max(0, salt - dissolved) * 1.5))
+        for index in range(solid_count):
+            x = beaker.left() + 18 + (index * 29 % max(int(beaker.width() - 36), 1))
+            y = beaker.bottom() - 13 - (index % 3) * 4
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor("#fff0bb"))
+            painter.drawRect(QRectF(x, y, 4, 4))
+        self._caption(painter, "VIRTUAL MIXING BENCH", 30, 52, CYAN)
+        self._caption(painter, f"WATER {water:.0f} mL  ·  SALT {salt:.0f} g", 30, bounds.height() - 22, AMBER)
+        if acid or base:
+            self._caption(painter, f"ACID {acid:.0f} mL  ·  BASE {base:.0f} mL", bounds.width() - 240, bounds.height() - 22, PINK)
+
+    def _draw_circuit_playground(self, painter: QPainter, bounds):
+        center_y = bounds.height() * 0.52
+        left, right = bounds.width() * 0.22, bounds.width() * 0.78
+        top, bottom = bounds.height() * 0.25, bounds.height() * 0.78
+        battery = bool(self.playground_items.get("battery"))
+        switch = bool(self.playground_items.get("switch"))
+        wire = bool(self.playground_items.get("wire"))
+        bulb = bool(self.playground_items.get("bulb"))
+        complete = battery and switch and wire and bulb
+        painter.setPen(QPen(MINT if complete else QColor("#52776a"), 5, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        if wire:
+            painter.drawLine(QPointF(left, center_y), QPointF(left, top))
+            painter.drawLine(QPointF(left, top), QPointF(right, top))
+            painter.drawLine(QPointF(right, top), QPointF(right, center_y))
+            painter.drawLine(QPointF(right, center_y), QPointF(right, bottom))
+            painter.drawLine(QPointF(right, bottom), QPointF(left, bottom))
+            painter.drawLine(QPointF(left, bottom), QPointF(left, center_y))
+        if battery:
+            painter.setPen(QPen(QColor("#9acbb9"), 2))
+            painter.setBrush(QColor("#234d40"))
+            painter.drawRoundedRect(QRectF(left - 32, center_y - 40, 64, 80), 9, 9)
+            painter.setPen(QColor("#f4d480"))
+            painter.drawText(QRectF(left - 30, center_y - 11, 60, 22), Qt.AlignCenter, "9 V")
+        if switch:
+            switch_x = (left + right) / 2
+            painter.setPen(QPen(AMBER, 4, Qt.SolidLine, Qt.RoundCap))
+            painter.drawLine(QPointF(switch_x - 25, top), QPointF(switch_x + 20, top - 18))
+            painter.setBrush(AMBER)
+            painter.drawEllipse(QPointF(switch_x - 25, top), 5, 5)
+            painter.drawEllipse(QPointF(switch_x + 25, top), 5, 5)
+        if bulb:
+            bulb_center = QPointF(right, center_y)
+            painter.setPen(QPen(QColor("#ffdb85" if complete else "#749083"), 3))
+            painter.setBrush(QColor(255, 201, 88, 125 if complete else 24))
+            painter.drawEllipse(bulb_center, 24 if complete else 18, 24 if complete else 18)
+            painter.drawLine(QPointF(right - 10, center_y + 20), QPointF(right + 10, center_y + 20))
+        if complete:
+            for index in range(8):
+                progress = (self.elapsed * 0.45 + index / 8) % 1
+                x = left + (right - left) * progress
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(AMBER)
+                painter.drawEllipse(QPointF(x, top), 4, 4)
+        self._caption(painter, "VIRTUAL CIRCUIT · 9 V MAX", 30, 52, CYAN)
+        self._caption(painter, "CLOSED LOOP" if complete else "ADD PARTS, THEN CLOSE THE SWITCH", 30, bounds.height() - 22, AMBER)
+
+    def _draw_salt_solubility(self, painter: QPainter, bounds):
+        water = self.parameters.get("water", 100)
+        salt = self.parameters.get("salt", 20)
+        temperature = self.parameters.get("temperature", 20)
+        dissolved = min(salt, water * (0.32 + temperature * 0.0007))
+        beaker = QRectF(bounds.width() * 0.34, bounds.height() * 0.25, bounds.width() * 0.32, bounds.height() * 0.60)
+        fill = QRectF(beaker.left() + 5, beaker.bottom() - beaker.height() * 0.62, beaker.width() - 10, beaker.height() * 0.62 - 5)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#348f91"))
+        painter.drawRoundedRect(fill, 8, 8)
+        painter.setBrush(QColor(117, 222, 209, 140))
+        painter.drawEllipse(QRectF(fill.left(), fill.top() - 5, fill.width(), 14))
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor("#b7dfd1"), 3))
+        painter.drawRoundedRect(beaker, 10, 10)
+        for index in range(min(25, int(dissolved))):
+            x = beaker.left() + 18 + (index * 31 % max(int(beaker.width() - 36), 1))
+            y = fill.top() + 15 + (index * 19 % max(int(fill.height() - 25), 1))
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor("#fff0bb"))
+            painter.drawEllipse(QPointF(x, y), 3, 3)
+        for index in range(min(20, int(max(0, salt - dissolved) * 1.5))):
+            x = beaker.left() + 18 + (index * 29 % max(int(beaker.width() - 36), 1))
+            painter.setBrush(QColor("#fff0bb"))
+            painter.drawRect(QRectF(x, beaker.bottom() - 14 - index % 3 * 4, 4, 4))
+        self._caption(painter, f"{temperature} °C  ·  {dissolved:.1f} g DISSOLVED", 26, bounds.height() - 20, AMBER)
 
     def _draw_particle_states(self, painter: QPainter, bounds):
         temperature = self.parameters.get("temperature", 35)

@@ -160,6 +160,9 @@ def build_tutor_system_prompt(level: str, stream: str, subject: str) -> str:
             "or Ask a question. Invite the student to choose a topic or mode.",
             "For past-paper quizzes, create original past-paper-style questions unless the student supplies "
             "a question. Never claim an invented question is an official past-paper question.",
+            "Format answers with standard Markdown headings and bullets. For science notation, prefer readable "
+            "forms such as degrees C, H2O and x^2; avoid emoji, decorative Unicode, box-drawing characters, "
+            "and unusual superscript or subscript glyphs.",
             "Use plain language, supportive tone, and well-structured answers. Be honest whenever unsure.",
         )
     )

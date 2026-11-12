@@ -61,3 +61,17 @@ def test_markdown_keeps_code_blocks_and_escapes_html():
     assert "&lt;script&gt;" in rendered
     assert "<script>" not in rendered
     assert "$x^2$" in rendered
+
+
+def test_model_text_repairs_common_mojibake_and_missing_glyphs():
+    cleaned = MainWindow._clean_model_text("At 0Â°C â€“ solid �□like")
+
+    assert cleaned == "At 0 degrees C - solid like"
+
+
+def test_model_markdown_bold_is_rendered_instead_of_showing_asterisks():
+    rendered = MainWindow._format_message_content("**SOLID-LIKE** particles")
+
+    assert "font-weight:700" in rendered
+    assert "SOLID-LIKE" in rendered
+    assert "**SOLID-LIKE**" not in rendered

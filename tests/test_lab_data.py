@@ -21,7 +21,11 @@ def test_experiment_ids_are_unique_and_every_experiment_has_learning_and_safety_
     assert len(identifiers) == len(set(identifiers))
     assert all(experiment.objective.strip() for experiment in EXPERIMENTS)
     assert all(experiment.safety.strip() for experiment in EXPERIMENTS)
-    assert all(experiment.parameters for experiment in EXPERIMENTS)
+    button_playgrounds = {"chemistry-playground", "circuit-playground"}
+    assert all(
+        experiment.parameters or experiment.identifier in button_playgrounds
+        for experiment in EXPERIMENTS
+    )
 
 
 def test_experiment_lookup_and_subject_filter_are_consistent():

@@ -78,3 +78,37 @@ def test_canvas_single_step_and_playback_rate_are_bounded():
     canvas.step()
     assert canvas.elapsed == current_time
     canvas.pause()
+
+
+def test_chemistry_playground_adds_water_and_salt_and_reports_saturation():
+    app()
+    canvas = LabCanvas()
+    experiment = experiment_by_id("chemistry-playground")
+    assert experiment is not None
+    canvas.set_playground(experiment)
+    canvas.add_playground_item("water")
+    canvas.add_playground_item("salt")
+    canvas.add_playground_item("salt")
+
+    readings = canvas.measurements()
+    assert readings["WATER"] == "25 mL"
+    assert readings["DISSOLVED SALT"] == "9.0 g"
+    assert readings["SOLID LEFT"] == "1.0 g"
+    canvas.close()
+
+
+def test_circuit_playground_switch_controls_current_and_bulb():
+    app()
+    canvas = LabCanvas()
+    experiment = experiment_by_id("circuit-playground")
+    assert experiment is not None
+    canvas.set_playground(experiment)
+    for item in ("battery", "wire", "bulb", "switch"):
+        canvas.add_playground_item(item)
+    assert canvas.measurements()["CURRENT"] == "0.30 A"
+    assert canvas.measurements()["BULB"] == "Lit"
+
+    canvas.add_playground_item("switch")
+    assert canvas.measurements()["CURRENT"] == "0.00 A"
+    assert canvas.measurements()["BULB"] == "Off"
+    canvas.close()
