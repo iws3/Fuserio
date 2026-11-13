@@ -282,7 +282,10 @@ def test_math_lab_tutor_explains_computed_values_in_its_own_panel(window):
     window.math_function_edit.setText("2*x + 1")
     window.math_plot_button.click()
     assert window.math_question_input.placeholderText().startswith("Ask the tutor")
+    assert window.math_explain_button.text() == "Ask Fuserio"
+    assert not window.math_tutor_sidebar.isVisible()
     window.math_explain_button.click()
+    assert window.math_tutor_sidebar.isVisible()
 
     tutor_request = FakeChatWorker.instances[-1].messages
     assert "BEST-FIT LINE" in tutor_request[0]["content"]
@@ -294,6 +297,8 @@ def test_math_lab_tutor_explains_computed_values_in_its_own_panel(window):
     assert "y rises by 2 units" in window.math_explanation_view.toHtml()
     window._chat_finished()
     assert not window.math_analysis_active
+    window.math_tutor_close_button.click()
+    assert not window.math_tutor_sidebar.isVisible()
 
 
 def test_mobile_navigation_opens_a_chemistry_topic(window):

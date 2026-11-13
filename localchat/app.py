@@ -446,8 +446,8 @@ def build_stylesheet() -> str:
         font-size: 11px;
     }
 
-    #labTutorPanel {
-        background: rgba(8, 23, 20, 0.95);
+    #mathTutorSidebar, #labTutorPanel {
+        background: rgba(8, 26, 22, 0.96);
         border: 1px solid rgba(89, 220, 169, 0.38);
         border-radius: 12px;
         padding: 4px;
@@ -1769,8 +1769,9 @@ class MainWindow(QMainWindow):
         self.math_plot_button.setObjectName("sendButton")
         self.math_plot_button.clicked.connect(self._run_math_analysis)
         action_row.addWidget(self.math_plot_button)
-        self.math_explain_button = QPushButton("Explain with tutor")
+        self.math_explain_button = QPushButton("Ask Fuserio")
         self.math_explain_button.setObjectName("studyModeButton")
+        self.math_explain_button.setToolTip("Ask Fuserio AI tutor to analyze and explain this graph in a dedicated sidebar")
         self.math_explain_button.clicked.connect(self._explain_math_analysis)
         action_row.addWidget(self.math_explain_button)
         action_row.addStretch(1)
@@ -1783,23 +1784,61 @@ class MainWindow(QMainWindow):
 
         self.math_analysis_workspace = QWidget()
         self.math_analysis_workspace.setObjectName("mathAnalysisRight")
-        workspace_layout = QVBoxLayout(self.math_analysis_workspace)
-        workspace_layout.setContentsMargins(12, 18, 18, 18)
-        workspace_layout.setSpacing(10)
+        self.math_workspace_layout = QBoxLayout(QBoxLayout.LeftToRight, self.math_analysis_workspace)
+        self.math_workspace_layout.setContentsMargins(12, 18, 18, 18)
+        self.math_workspace_layout.setSpacing(14)
+
+        self.math_stage = QWidget()
+        self.math_stage.setObjectName("mathStage")
+        stage_layout = QVBoxLayout(self.math_stage)
+        stage_layout.setContentsMargins(0, 0, 0, 0)
+        stage_layout.setSpacing(10)
 
         self.math_plot_view = PlotPreview()
-        workspace_layout.addWidget(self.math_plot_view, 3)
+        stage_layout.addWidget(self.math_plot_view, 3)
 
         self.math_results_view = QTextBrowser()
         self.math_results_view.setObjectName("mathResults")
         self.math_results_view.setReadOnly(True)
-        self.math_results_view.setMinimumHeight(140)
-        self.math_results_view.setMaximumHeight(220)
-        workspace_layout.addWidget(self.math_results_view)
+        self.math_results_view.setMinimumHeight(120)
+        self.math_results_view.setMaximumHeight(200)
+        stage_layout.addWidget(self.math_results_view)
 
-        question_header = QLabel("Tutor Q&A")
+        self.math_workspace_layout.addWidget(self.math_stage, 3)
+
+        self.math_tutor_sidebar = QWidget()
+        self.math_tutor_sidebar.setObjectName("mathTutorSidebar")
+        self.math_tutor_sidebar.setMinimumWidth(320)
+        sidebar_layout = QVBoxLayout(self.math_tutor_sidebar)
+        sidebar_layout.setContentsMargins(12, 12, 12, 12)
+        sidebar_layout.setSpacing(10)
+
+        tutor_header = QWidget()
+        tutor_header_layout = QHBoxLayout(tutor_header)
+        tutor_header_layout.setContentsMargins(0, 0, 0, 0)
+        tutor_header_layout.setSpacing(8)
+
+        tutor_title = QLabel("FUSERIO MATH TUTOR")
+        tutor_title.setObjectName("labControlLabel")
+        tutor_header_layout.addWidget(tutor_title)
+        tutor_header_layout.addStretch(1)
+
+        self.math_tutor_close_button = QPushButton("Close sidebar")
+        self.math_tutor_close_button.setObjectName("studyModeButton")
+        self.math_tutor_close_button.setToolTip("Close tutor sidebar")
+        self.math_tutor_close_button.clicked.connect(self._close_math_tutor_sidebar)
+        tutor_header_layout.addWidget(self.math_tutor_close_button)
+        sidebar_layout.addWidget(tutor_header)
+
+        self.math_explanation_view = QTextBrowser()
+        self.math_explanation_view.setObjectName("mathExplanation")
+        self.math_explanation_view.setReadOnly(True)
+        self.math_explanation_view.setMinimumHeight(240)
+        sidebar_layout.addWidget(self.math_explanation_view, 1)
+
+        question_header = QLabel("TUTOR Q&A")
         question_header.setObjectName("labControlLabel")
-        workspace_layout.addWidget(question_header)
+        sidebar_layout.addWidget(question_header)
 
         question_row = QHBoxLayout()
         self.math_question_input = QLineEdit()
@@ -1812,17 +1851,14 @@ class MainWindow(QMainWindow):
         self.math_question_button.setObjectName("studyModeButton")
         self.math_question_button.clicked.connect(self._ask_math_follow_up)
         question_row.addWidget(self.math_question_button)
-        workspace_layout.addLayout(question_row)
+        sidebar_layout.addLayout(question_row)
 
-        self.math_explanation_view = QTextBrowser()
-        self.math_explanation_view.setObjectName("mathExplanation")
-        self.math_explanation_view.setReadOnly(True)
-        self.math_explanation_view.setMinimumHeight(180)
-        workspace_layout.addWidget(self.math_explanation_view, 1)
+        self.math_workspace_layout.addWidget(self.math_tutor_sidebar, 2)
+        self.math_tutor_sidebar.hide()
 
         self.math_live_timer = QTimer(self)
         self.math_live_timer.setSingleShot(True)
-        self.math_live_timer.setInterval(250)
+        self.math_live_timer.setInterval(180)
         self.math_live_timer.timeout.connect(self._run_math_analysis)
         self.math_function_edit.textChanged.connect(self._schedule_live_math_plot)
         self.math_data_edit.textChanged.connect(self._schedule_live_math_plot)
@@ -1915,7 +1951,11 @@ class MainWindow(QMainWindow):
             f"<table>{rows}</table></body></html>"
         )
 
+    def _close_math_tutor_sidebar(self):
+        self.math_tutor_sidebar.hide()
+
     def _explain_math_analysis(self):
+        self.math_tutor_sidebar.show()
         if self.math_analysis_result is None and not self._run_math_analysis():
             return
         result = self.math_analysis_result
@@ -1957,6 +1997,7 @@ class MainWindow(QMainWindow):
         )
 
     def _ask_math_follow_up(self):
+        self.math_tutor_sidebar.show()
         question = self.math_question_input.text().strip()
         if not question:
             return
@@ -2290,6 +2331,13 @@ class MainWindow(QMainWindow):
             else:
                 self.math_page_layout.setDirection(QBoxLayout.LeftToRight)
                 self.math_analysis_controls.setMaximumWidth(460)
+        if hasattr(self, "math_workspace_layout") and hasattr(self, "math_tutor_sidebar"):
+            if self.width() < 1050:
+                self.math_workspace_layout.setDirection(QBoxLayout.TopToBottom)
+                self.math_tutor_sidebar.setMinimumWidth(0)
+            else:
+                self.math_workspace_layout.setDirection(QBoxLayout.LeftToRight)
+                self.math_tutor_sidebar.setMinimumWidth(320)
         if hasattr(self, "lab_detail_layout"):
             if self.width() < 960:
                 self.lab_detail_layout.setDirection(QBoxLayout.TopToBottom)
