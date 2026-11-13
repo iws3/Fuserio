@@ -13,6 +13,7 @@ from PySide6.QtCore import QEvent, QEasingCurve, QProcess, QProcessEnvironment, 
 from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
+    QBoxLayout,
     QComboBox,
     QDoubleSpinBox,
     QGridLayout,
@@ -184,35 +185,36 @@ def build_stylesheet() -> str:
     }
 
     #studyCard {
-        background: rgba(7, 31, 26, 0.92);
-        border: 1px solid rgba(75, 186, 153, 0.42);
-        border-radius: 10px;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(8, 34, 28, 0.95), stop:1 rgba(11, 44, 36, 0.98));
+        border: 1px solid rgba(75, 186, 153, 0.45);
+        border-radius: 12px;
         color: #e4fff2;
-        padding: 18px;
-        min-height: 74px;
+        padding: 20px 22px;
+        min-height: 80px;
         text-align: left;
         font-size: 15px;
         font-weight: 700;
     }
 
     #studyCard:hover {
-        background: rgba(14, 58, 45, 0.98);
-        border-color: #69efb5;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(16, 64, 52, 0.98), stop:1 rgba(12, 54, 44, 0.98));
+        border-color: #57fabc;
+        color: #ffffff;
     }
 
     #studyModeButton {
         background: rgba(10, 39, 32, 0.9);
-        border: 1px solid rgba(75, 186, 153, 0.4);
+        border: 1px solid rgba(75, 186, 153, 0.45);
         border-radius: 8px;
         color: #baf3d4;
-        padding: 8px 12px;
+        padding: 8px 14px;
         font-size: 11px;
         font-weight: 700;
     }
 
     #studyModeButton:hover {
-        background: rgba(17, 74, 54, 0.98);
-        border-color: #69efb5;
+        background: rgba(18, 76, 58, 0.98);
+        border-color: #57fabc;
         color: #effff7;
     }
 
@@ -1320,8 +1322,19 @@ class MainWindow(QMainWindow):
             button = self._study_card(level, "O Level" if column == 0 else "A Level")
             button.clicked.connect(lambda _checked=False, value=level: self.select_gce_level(value))
             level_grid.addWidget(button, 0, column)
-        level_layout.addLayout(level_grid)
-        level_layout.addStretch(1)
+        level_scroll = QScrollArea()
+        level_scroll.setWidgetResizable(True)
+        level_scroll.setFrameShape(QScrollArea.NoFrame)
+        level_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        level_container = QWidget()
+        level_inner_layout = QVBoxLayout(level_container)
+        level_inner_layout.setContentsMargins(0, 0, 0, 0)
+        level_inner_layout.setSpacing(14)
+        level_inner_layout.addWidget(start_logo)
+        level_inner_layout.addLayout(level_grid)
+        level_inner_layout.addStretch(1)
+        level_scroll.setWidget(level_container)
+        level_layout.addWidget(level_scroll, 1)
         self.content_stack.addWidget(self.level_page)
         self.gce_pages["level"] = self.level_page
 
@@ -1337,8 +1350,18 @@ class MainWindow(QMainWindow):
             self.stream_card_buttons[stream] = button
             button.clicked.connect(lambda _checked=False, value=stream: self.select_gce_stream(value))
             stream_grid.addWidget(button, index // 2, index % 2)
-        self.stream_page.layout().addLayout(stream_grid)
-        self.stream_page.layout().addStretch(1)
+        stream_scroll = QScrollArea()
+        stream_scroll.setWidgetResizable(True)
+        stream_scroll.setFrameShape(QScrollArea.NoFrame)
+        stream_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        stream_container = QWidget()
+        stream_inner_layout = QVBoxLayout(stream_container)
+        stream_inner_layout.setContentsMargins(0, 0, 0, 0)
+        stream_inner_layout.setSpacing(14)
+        stream_inner_layout.addLayout(stream_grid)
+        stream_inner_layout.addStretch(1)
+        stream_scroll.setWidget(stream_container)
+        self.stream_page.layout().addWidget(stream_scroll, 1)
         self.content_stack.addWidget(self.stream_page)
         self.gce_pages["stream"] = self.stream_page
 
@@ -1374,8 +1397,18 @@ class MainWindow(QMainWindow):
         math_card.setAccessibleName("Open Mathematics data analysis workspace")
         math_card.clicked.connect(self.open_math_analysis)
         self.lab_subject_grid.addWidget(math_card, 1, 0)
-        self.lab_home_page.layout().addLayout(self.lab_subject_grid)
-        self.lab_home_page.layout().addStretch(1)
+        lab_home_scroll = QScrollArea()
+        lab_home_scroll.setWidgetResizable(True)
+        lab_home_scroll.setFrameShape(QScrollArea.NoFrame)
+        lab_home_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        lab_home_container = QWidget()
+        lab_home_inner_layout = QVBoxLayout(lab_home_container)
+        lab_home_inner_layout.setContentsMargins(0, 0, 0, 0)
+        lab_home_inner_layout.setSpacing(14)
+        lab_home_inner_layout.addLayout(self.lab_subject_grid)
+        lab_home_inner_layout.addStretch(1)
+        lab_home_scroll.setWidget(lab_home_container)
+        self.lab_home_page.layout().addWidget(lab_home_scroll, 1)
         self.content_stack.addWidget(self.lab_home_page)
 
         self.lab_gallery_page = self._selection_page(
@@ -1401,7 +1434,7 @@ class MainWindow(QMainWindow):
         detail_page_layout = QVBoxLayout(self.lab_detail_page)
         detail_page_layout.setContentsMargins(0, 0, 0, 0)
         self.lab_detail_content = QWidget()
-        self.lab_detail_layout = QHBoxLayout(self.lab_detail_content)
+        self.lab_detail_layout = QBoxLayout(QBoxLayout.LeftToRight, self.lab_detail_content)
         self.lab_detail_layout.setContentsMargins(22, 18, 22, 20)
         self.lab_detail_layout.setSpacing(14)
 
@@ -1630,9 +1663,21 @@ class MainWindow(QMainWindow):
 
     def _build_math_analysis_page(self):
         self.math_analysis_page = QWidget()
-        page_layout = QHBoxLayout(self.math_analysis_page)
+        page_layout = QVBoxLayout(self.math_analysis_page)
         page_layout.setContentsMargins(0, 0, 0, 0)
         page_layout.setSpacing(0)
+
+        math_scroll = QScrollArea()
+        math_scroll.setObjectName("mathAnalysisScroll")
+        math_scroll.setWidgetResizable(True)
+        math_scroll.setFrameShape(QScrollArea.NoFrame)
+        math_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.math_analysis_scroll = math_scroll
+
+        self.math_analysis_container = QWidget()
+        self.math_page_layout = QBoxLayout(QBoxLayout.LeftToRight, self.math_analysis_container)
+        self.math_page_layout.setContentsMargins(0, 0, 0, 0)
+        self.math_page_layout.setSpacing(0)
 
         self.math_analysis_controls = QWidget()
         self.math_analysis_controls.setObjectName("mathAnalysisLeft")
@@ -1786,8 +1831,10 @@ class MainWindow(QMainWindow):
         self.math_samples.valueChanged.connect(self._schedule_live_math_plot)
         self.math_mode_selector.currentIndexChanged.connect(self._set_math_input_mode)
 
-        page_layout.addWidget(self.math_analysis_controls, 2)
-        page_layout.addWidget(self.math_analysis_workspace, 5)
+        self.math_page_layout.addWidget(self.math_analysis_controls, 2)
+        self.math_page_layout.addWidget(self.math_analysis_workspace, 5)
+        math_scroll.setWidget(self.math_analysis_container)
+        page_layout.addWidget(math_scroll)
         self.content_stack.addWidget(self.math_analysis_page)
 
     def changeEvent(self, event):
@@ -2236,6 +2283,22 @@ class MainWindow(QMainWindow):
             topic = next((item for item in level.topics if item.number == self.chemistry_topic_number), None) if level else None
             if level and topic and hasattr(self, "chemistry_practical_scroll"):
                 self._show_chemistry_topic(level.label, topic)
+        if hasattr(self, "math_page_layout"):
+            if self.width() < 960:
+                self.math_page_layout.setDirection(QBoxLayout.TopToBottom)
+                self.math_analysis_controls.setMaximumWidth(16777215)
+            else:
+                self.math_page_layout.setDirection(QBoxLayout.LeftToRight)
+                self.math_analysis_controls.setMaximumWidth(460)
+        if hasattr(self, "lab_detail_layout"):
+            if self.width() < 960:
+                self.lab_detail_layout.setDirection(QBoxLayout.TopToBottom)
+                self.lab_tutor_panel.setMinimumWidth(0)
+            else:
+                self.lab_detail_layout.setDirection(QBoxLayout.LeftToRight)
+                self.lab_tutor_panel.setMinimumWidth(320)
+        if hasattr(self, "model_detail"):
+            self.model_detail.setVisible(self.width() >= 760)
 
     def open_experiment(self, identifier: str):
         experiment = experiment_by_id(identifier)

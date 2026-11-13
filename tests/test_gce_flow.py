@@ -597,3 +597,30 @@ def test_gce_button_restores_last_saved_subject_and_conversation(qapp, monkeypat
     assert test_window.messages[1]["content"] == "Saved tutor feedback"
     assert test_window.gce_modes[0]["mode"] == "Practice"
     test_window.close()
+
+
+def test_responsive_layouts_adapt_to_screen_dimensions(window):
+    from PySide6.QtCore import QSize
+    from PySide6.QtGui import QResizeEvent
+    from PySide6.QtWidgets import QApplication, QBoxLayout
+
+    # Test narrow / mobile layout
+    window.resize(720, 600)
+    window.resizeEvent(QResizeEvent(QSize(720, 600), window.size()))
+    QApplication.processEvents()
+    assert window.sidebar.isHidden()
+    assert not window.mobile_menu_button.isHidden()
+    assert not window.model_detail.isVisible()
+    assert window.math_page_layout.direction() == QBoxLayout.TopToBottom
+    assert window.lab_detail_layout.direction() == QBoxLayout.TopToBottom
+
+    # Test desktop / wide layout
+    window.resize(1280, 800)
+    window.resizeEvent(QResizeEvent(QSize(1280, 800), window.size()))
+    QApplication.processEvents()
+    assert not window.sidebar.isHidden()
+    assert window.mobile_menu_button.isHidden()
+    assert not window.model_detail.isHidden()
+    assert window.math_page_layout.direction() == QBoxLayout.LeftToRight
+    assert window.lab_detail_layout.direction() == QBoxLayout.LeftToRight
+
