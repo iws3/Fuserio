@@ -629,3 +629,25 @@ def test_responsive_layouts_adapt_to_screen_dimensions(window):
     assert window.math_page_layout.direction() == QBoxLayout.LeftToRight
     assert window.lab_detail_layout.direction() == QBoxLayout.LeftToRight
 
+
+def test_titration_workbench_integration_in_main_window(window):
+    window.open_experiment("titration")
+
+    assert window.active_experiment.identifier == "titration"
+    assert "volume" in window.lab_parameter_sliders
+    assert "volume" in window.lab_parameter_labels
+
+    # Trigger dropwise titrant addition via UI action
+    window._titration_action("dropwise")
+    assert window.lab_canvas.parameters["volume"] == 0.10
+    assert window.lab_parameter_labels["volume"].text() == "0.1 mL"
+
+    # Trigger coarse addition
+    window._titration_action("add_1ml")
+    assert window.lab_canvas.parameters["volume"] == 1.10
+    assert window.lab_parameter_labels["volume"].text() == "1.1 mL"
+
+    # Verify metrics updated in the UI
+    assert "TITRE" in window.lab_metric_labels
+    assert window.lab_metric_labels["TITRE"].text() == "1.10 mL"
+

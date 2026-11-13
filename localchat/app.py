@@ -904,6 +904,7 @@ class MainWindow(QMainWindow):
         self.lab_subject = ""
         self.active_experiment = None
         self.lab_parameter_labels = {}
+        self.lab_parameter_sliders = {}
         self.lab_metric_labels = {}
         self.lab_side_panel_active = False
         self.lab_tutor_content = ""
@@ -1465,6 +1466,7 @@ class MainWindow(QMainWindow):
         self.lab_canvas_shell_layout = QVBoxLayout(self.lab_canvas_shell)
         self.lab_canvas_shell_layout.setContentsMargins(10, 10, 10, 10)
         self.lab_canvas = LabCanvas()
+        self.lab_canvas.metrics_updated.connect(self._sync_lab_runtime)
         self.lab_canvas.setMinimumHeight(480)
         self.lab_canvas_shell_layout.addWidget(self.lab_canvas)
         self.lab_workspace_layout.addWidget(self.lab_canvas_shell, 1)
@@ -2384,6 +2386,7 @@ class MainWindow(QMainWindow):
     def _build_lab_controls(self, experiment):
         self._clear_layout(self.lab_controls_layout)
         self.lab_parameter_labels = {}
+        self.lab_parameter_sliders = {}
         playground_tools = {
             "chemistry-playground": (
                 ("Add water +25 mL", "water"),
@@ -2412,6 +2415,72 @@ class MainWindow(QMainWindow):
                 tool_layout.addWidget(button)
             self.lab_controls_layout.addWidget(tool_row)
             return
+
+        if experiment.identifier == "titration":
+            workbench = QWidget()
+            workbench.setObjectName("titrationWorkbench")
+            wb_layout = QVBoxLayout(workbench)
+            wb_layout.setContentsMargins(0, 0, 0, 8)
+            wb_layout.setSpacing(6)
+
+            title_label = QLabel("🧪 TITRATION WORKBENCH (ADD INGREDIENTS)")
+            title_label.setObjectName("labControlLabel")
+            title_label.setStyleSheet("font-weight: bold; color: #57fabc; font-size: 11px;")
+            wb_layout.addWidget(title_label)
+
+            row1 = QHBoxLayout()
+            row1.setSpacing(6)
+            pipette_btn = QPushButton("🧪 Pipette 25 mL Acid")
+            pipette_btn.setObjectName("studyModeButton")
+            pipette_btn.setToolTip("Pipette 25.0 mL of analyte acid solution into the conical flask")
+            pipette_btn.clicked.connect(lambda _=False: self._titration_action("pipette_acid"))
+
+            indicator_btn = QPushButton("💧 Add Indicator (+1)")
+            indicator_btn.setObjectName("studyModeButton")
+            indicator_btn.setToolTip("Add indicator drops to the flask (Phenolphthalein, Methyl orange, Bromothymol blue)")
+            indicator_btn.clicked.connect(lambda _=False: self._titration_action("add_indicator"))
+
+            wash_btn = QPushButton("🚿 Wash Neck (+5 mL)")
+            wash_btn.setObjectName("studyModeButton")
+            wash_btn.setToolTip("Rinse flask neck with distilled water bottle")
+            wash_btn.clicked.connect(lambda _=False: self._titration_action("wash_water"))
+
+            row1.addWidget(pipette_btn)
+            row1.addWidget(indicator_btn)
+            row1.addWidget(wash_btn)
+            wb_layout.addLayout(row1)
+
+            row2 = QHBoxLayout()
+            row2.setSpacing(6)
+            drop_btn = QPushButton("💧 Dropwise (+0.10 mL)")
+            drop_btn.setObjectName("studyModeButton")
+            drop_btn.setStyleSheet("color: #57fabc; font-weight: bold;")
+            drop_btn.setToolTip("Add single precision drop of titrant (0.10 mL)")
+            drop_btn.clicked.connect(lambda _=False: self._titration_action("dropwise"))
+
+            coarse_btn = QPushButton("💧 Add +1.0 mL")
+            coarse_btn.setObjectName("studyModeButton")
+            coarse_btn.setToolTip("Add 1.0 mL titrant when far from endpoint")
+            coarse_btn.clicked.connect(lambda _=False: self._titration_action("add_1ml"))
+
+            swirl_btn = QPushButton("🌀 Swirl Flask")
+            swirl_btn.setObjectName("studyModeButton")
+            swirl_btn.setToolTip("Swirl conical flask to mix solution and diffuse transient flashes")
+            swirl_btn.clicked.connect(lambda _=False: self._titration_action("swirl"))
+
+            refill_btn = QPushButton("↺ Refill Burette")
+            refill_btn.setObjectName("studyModeButton")
+            refill_btn.setToolTip("Reset titrant reading back to 0.00 mL")
+            refill_btn.clicked.connect(lambda _=False: self._titration_action("fill_burette"))
+
+            row2.addWidget(drop_btn)
+            row2.addWidget(coarse_btn)
+            row2.addWidget(swirl_btn)
+            row2.addWidget(refill_btn)
+            wb_layout.addLayout(row2)
+
+            self.lab_controls_layout.addWidget(workbench)
+
         for parameter in experiment.parameters:
             row = QWidget()
             row_layout = QVBoxLayout(row)
@@ -2435,7 +2504,32 @@ class MainWindow(QMainWindow):
             )
             row_layout.addWidget(slider)
             self.lab_parameter_labels[parameter.key] = value_label
+            self.lab_parameter_sliders[parameter.key] = slider
             self.lab_controls_layout.addWidget(row)
+
+    def _sync_lab_runtime(self):
+        if self.active_experiment and self.active_experiment.identifier == "titration":
+            vol = float(self.lab_canvas.parameters.get("volume", 0))
+            if "volume" in self.lab_parameter_sliders:
+                slider = self.lab_parameter_sliders["volume"]
+                slider.blockSignals(True)
+                slider.setValue(int(vol))
+                slider.blockSignals(False)
+            if "volume" in self.lab_parameter_labels:
+                self.lab_parameter_labels["volume"].setText(f"{vol:.1f} mL")
+        self._update_lab_metrics()
+
+    def _titration_action(self, action: str):
+        self.lab_canvas.titration_action(action)
+        vol = float(self.lab_canvas.parameters.get("volume", 0))
+        if "volume" in self.lab_parameter_sliders:
+            slider = self.lab_parameter_sliders["volume"]
+            slider.blockSignals(True)
+            slider.setValue(int(vol))
+            slider.blockSignals(False)
+        if "volume" in self.lab_parameter_labels:
+            self.lab_parameter_labels["volume"].setText(f"{vol:.1f} mL")
+        self._update_lab_metrics()
 
     def _add_playground_item(self, item: str):
         self.lab_canvas.add_playground_item(item)

@@ -112,3 +112,82 @@ def test_circuit_playground_switch_controls_current_and_bulb():
     assert canvas.measurements()["CURRENT"] == "0.00 A"
     assert canvas.measurements()["BULB"] == "Off"
     canvas.close()
+
+
+def test_titration_interactive_actions_and_measurements():
+    app()
+    canvas = LabCanvas()
+    experiment = experiment_by_id("titration")
+    assert experiment is not None
+    canvas.set_experiment(experiment)
+
+    m = canvas.measurements()
+    assert m["VOLUME"] == "0.0 mL"
+    assert "MODEL pH" in m
+    assert "Phenolphthalein" in m["INDICATOR"]
+    assert "TITRE" in m
+    assert "EQUIVALENCE" in m
+    assert "STATUS" in m
+
+    # Add indicator drop
+    initial_drops = canvas.titration_indicator_drops
+    canvas.titration_action("add_indicator")
+    assert canvas.titration_indicator_drops == initial_drops + 1
+
+    # Clear indicator
+    canvas.titration_action("clear_indicator")
+    assert canvas.titration_indicator_drops == 0
+    assert "0 drops" in canvas.measurements()["INDICATOR"]
+
+    # Pipette acid & restore indicator
+    canvas.titration_action("pipette_acid")
+    assert canvas.titration_analyte_ml == 25.0
+    assert canvas.titration_analyte_pipetted is True
+    canvas.titration_action("add_indicator")
+
+    # Dropwise titrant addition
+    canvas.titration_action("dropwise")
+    assert canvas.parameters["volume"] == 0.10
+    assert canvas.measurements()["TITRE"] == "0.10 mL"
+
+    # Coarse titrant addition
+    canvas.titration_action("add_1ml")
+    assert canvas.parameters["volume"] == 1.10
+
+    # Swirl flask
+    canvas.titration_action("swirl")
+    assert canvas.titration_swirl_intensity == 1.0
+
+    # Wash flask neck with distilled water
+    canvas.titration_action("wash_water")
+    assert canvas.titration_water_wash_ml == 5.0
+
+    # Reset titration
+    canvas.titration_action("reset")
+    assert canvas.parameters["volume"] == 0
+    assert canvas.titration_water_wash_ml == 0.0
+    canvas.close()
+
+
+def test_titration_paints_apparatus_at_equivalence():
+    app()
+    canvas = LabCanvas()
+    canvas.resize(720, 480)
+    experiment = experiment_by_id("titration")
+    assert experiment is not None
+    canvas.set_experiment(experiment)
+    # Set to equivalence volume (25.0 mL)
+    canvas.set_parameter("volume", 25)
+    canvas.titration_action("dropwise")
+    canvas.titration_action("swirl")
+    canvas._tick()
+
+    m = canvas.measurements()
+    assert float(m["MODEL pH"]) >= 7.0
+    assert "Equivalence" in m["STATUS"] or "End point" in m["STATUS"]
+
+    img = canvas.grab().toImage()
+    assert not img.isNull()
+    assert img.width() == 720
+    assert img.height() == 480
+    canvas.close()
