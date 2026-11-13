@@ -103,6 +103,16 @@ def test_startup_offers_levels_and_sidebar_links_switch_workspaces(window):
     assert hasattr(window, "window_minimize_button")
     assert hasattr(window, "window_maximize_button")
     assert hasattr(window, "window_close_button")
+    assert window.window_maximize_button.toolTip() == "Maximize"
+    assert window.window_maximize_button.text() == "▢"
+    window._toggle_window_maximize()
+    assert window.window_maximize_button.toolTip() == "Restore Down"
+    assert window.window_maximize_button.text() == "❐"
+    window._toggle_window_maximize()
+    assert window.window_maximize_button.toolTip() == "Maximize"
+    assert window.window_maximize_button.text() == "▢"
+    assert isinstance(window.math_function_edit, app_module.MathEquationInput)
+    assert window.math_function_edit.isClearButtonEnabled()
 
     window.ai_workspace_button.click()
     assert window.content_stack.currentWidget() is window.chat_page

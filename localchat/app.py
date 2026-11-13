@@ -10,7 +10,7 @@ import unicodedata
 import requests
 
 from PySide6.QtCore import QEvent, QEasingCurve, QProcess, QProcessEnvironment, QPropertyAnimation, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -163,17 +163,24 @@ def build_stylesheet() -> str:
         min-height: 28px;
         max-height: 28px;
         padding: 0;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 800;
     }
 
     #windowControlButton:hover {
         background: rgba(17, 69, 58, 0.98);
         border-color: rgba(137, 248, 206, 0.72);
+        color: #ffffff;
     }
 
     #windowControlButton[variant="close"] {
         color: #ffb5ac;
+    }
+
+    #windowControlButton[variant="close"]:hover {
+        background: rgba(220, 53, 69, 0.9);
+        border-color: #ff6b6b;
+        color: #ffffff;
     }
 
     #studyCard {
@@ -401,7 +408,30 @@ def build_stylesheet() -> str:
         padding: 12px;
     }
 
-    #mathDataInput, #mathFunctionInput {
+    #mathFunctionInput {
+        background: rgba(6, 26, 21, 0.95);
+        border: 1.5px solid rgba(81, 204, 175, 0.55);
+        border-radius: 10px;
+        color: #6cf5c2;
+        font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+        font-size: 14px;
+        font-weight: 600;
+        padding: 8px 12px;
+        min-width: 0;
+    }
+
+    #mathFunctionInput:hover {
+        border-color: rgba(125, 255, 214, 0.85);
+        background: rgba(8, 35, 28, 0.95);
+    }
+
+    #mathFunctionInput:focus {
+        border: 2px solid #57fabc;
+        background: rgba(9, 40, 32, 0.98);
+        color: #ffffff;
+    }
+
+    #mathDataInput {
         min-width: 0;
     }
 
@@ -636,6 +666,49 @@ class PlotPreview(QLabel):
                     Qt.SmoothTransformation,
                 )
             )
+
+
+class MathEquationInput(QLineEdit):
+    """Equation input field with an inviting blinking caret to encourage input."""
+
+    def __init__(self, text: str = "", parent: QWidget | None = None):
+        super().__init__(text, parent)
+        self.setClearButtonEnabled(True)
+        self._cursor_visible = True
+        self._cursor_timer = QTimer(self)
+        self._cursor_timer.setInterval(500)
+        self._cursor_timer.timeout.connect(self._toggle_cursor_blink)
+        self._cursor_timer.start()
+
+    def _toggle_cursor_blink(self):
+        self._cursor_visible = not self._cursor_visible
+        self.update()
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self._cursor_visible = True
+        self.update()
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self._cursor_visible = True
+        self.update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not self.hasFocus() and self._cursor_visible:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            fm = self.fontMetrics()
+            text = self.text()
+            x = 13 + (fm.horizontalAdvance(text) if text else 0)
+            x = min(x, max(13, self.width() - 24))
+            caret_height = min(fm.height(), max(12, self.height() - 14))
+            y = (self.height() - caret_height) // 2
+            pen = QPen(QColor("#57fabc"), 2.2)
+            painter.setPen(pen)
+            painter.drawLine(x, y + 2, x, y + caret_height - 2)
+            painter.end()
 
 
 class ExistingServerProbe(QThread):
@@ -1558,7 +1631,7 @@ class MainWindow(QMainWindow):
         function_label = QLabel("y =")
         function_label.setObjectName("labControlLabel")
         function_row_layout.addWidget(function_label)
-        self.math_function_edit = QLineEdit("x**2 - 4*x + 3")
+        self.math_function_edit = MathEquationInput("x**2 - 4*x + 3")
         self.math_function_edit.setObjectName("mathFunctionInput")
         self.math_function_edit.setPlaceholderText("Type a formula like 2*x + 1 or sin(x)")
         self.math_function_edit.setAccessibleName("Function of x to plot")
@@ -1673,13 +1746,24 @@ class MainWindow(QMainWindow):
         page_layout.addWidget(self.math_analysis_workspace, 5)
         self.content_stack.addWidget(self.math_analysis_page)
 
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange and hasattr(self, "window_maximize_button"):
+            self._sync_window_maximize_state()
+
     def _toggle_window_maximize(self):
         if self.isMaximized():
             self.showNormal()
-            self.window_maximize_button.setToolTip("Maximize")
         else:
             self.showMaximized()
-            self.window_maximize_button.setToolTip("Restore")
+        self._sync_window_maximize_state()
+
+    def _sync_window_maximize_state(self):
+        if not hasattr(self, "window_maximize_button"):
+            return
+        is_max = self.isMaximized()
+        self.window_maximize_button.setText("❐" if is_max else "▢")
+        self.window_maximize_button.setToolTip("Restore Down" if is_max else "Maximize")
 
     def _schedule_live_math_plot(self):
         if self.math_analysis_page.isVisible():
