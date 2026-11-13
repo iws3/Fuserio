@@ -1609,6 +1609,30 @@ class MainWindow(QMainWindow):
         self.chemistry_practical_subheading.setObjectName("studySubheading")
         self.chemistry_practical_subheading.setWordWrap(True)
         practical_layout.addWidget(self.chemistry_practical_subheading)
+
+        self.chemistry_topic_launch_sim_button = QPushButton("🧪 Open Interactive Titration Simulation & Workbench  ➔")
+        self.chemistry_topic_launch_sim_button.setObjectName("studyActionButton")
+        self.chemistry_topic_launch_sim_button.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10463b, stop:1 #1c6454);
+                border: 1px solid #57fabc;
+                border-radius: 8px;
+                color: #ffffff;
+                font-weight: bold;
+                font-size: 13px;
+                padding: 10px 18px;
+                margin-top: 4px;
+                margin-bottom: 4px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #155c4d, stop:1 #247f6c);
+                border-color: #68efb2;
+            }
+        """)
+        self.chemistry_topic_launch_sim_button.clicked.connect(lambda: self.open_experiment("titration"))
+        self.chemistry_topic_launch_sim_button.hide()
+        practical_layout.addWidget(self.chemistry_topic_launch_sim_button)
+
         self.chemistry_practical_grid_host = QWidget()
         self.chemistry_practical_grid_host.setMinimumWidth(0)
         self.chemistry_practical_grid_host.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
@@ -1635,6 +1659,29 @@ class MainWindow(QMainWindow):
         self.chemistry_detail_title = QLabel("")
         self.chemistry_detail_title.setObjectName("chemistryTopicHeading")
         detail_layout.addWidget(self.chemistry_detail_title)
+
+        self.chemistry_detail_launch_sim_button = QPushButton("🧪 Open Interactive Titration Simulation & Workbench  ➔")
+        self.chemistry_detail_launch_sim_button.setObjectName("studyActionButton")
+        self.chemistry_detail_launch_sim_button.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10463b, stop:1 #1c6454);
+                border: 1px solid #57fabc;
+                border-radius: 8px;
+                color: #ffffff;
+                font-weight: bold;
+                font-size: 13px;
+                padding: 10px 18px;
+                margin-top: 4px;
+                margin-bottom: 4px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #155c4d, stop:1 #247f6c);
+                border-color: #68efb2;
+            }
+        """)
+        self.chemistry_detail_launch_sim_button.clicked.connect(lambda: self.open_experiment("titration"))
+        self.chemistry_detail_launch_sim_button.hide()
+        detail_layout.addWidget(self.chemistry_detail_launch_sim_button)
         self.chemistry_detail_image = QLabel("")
         self.chemistry_detail_image.setObjectName("practicalImageFallback")
         self.chemistry_detail_image.setMinimumHeight(190)
@@ -2203,6 +2250,10 @@ class MainWindow(QMainWindow):
                 lambda _checked=False, slug=self.chemistry_level_slug, number=topic.number, item_id=experiment.id: self._open_practical_detail(slug, number, item_id)
             )
             self.chemistry_practical_grid.addWidget(button, index // columns, index % columns)
+        if "titrat" in topic.title.lower() or topic.number == 2:
+            self.chemistry_topic_launch_sim_button.show()
+        else:
+            self.chemistry_topic_launch_sim_button.hide()
         self.content_stack.setCurrentWidget(self.chemistry_practical_page)
 
     def _open_practical_detail(self, level_slug: str, topic_number: int, experiment_id: str):
@@ -2214,6 +2265,10 @@ class MainWindow(QMainWindow):
         self.chemistry_detail_image.setText(f"⚗\nAPPARATUS PREVIEW\n\n{experiment.title}")
         self.chemistry_detail_image.setAccessibleName(experiment.image_alt)
         self.chemistry_detail_summary.setText(experiment.summary)
+        if "titrat" in experiment.title.lower() or "titrat" in experiment_id.lower() or topic_number == 2:
+            self.chemistry_detail_launch_sim_button.show()
+        else:
+            self.chemistry_detail_launch_sim_button.hide()
         self._set_chemistry_route(f"/chemistry/{level_slug}/{topic_number}/{experiment.id}")
         self.content_stack.setCurrentWidget(self.chemistry_detail_page)
 

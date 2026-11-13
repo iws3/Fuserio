@@ -651,3 +651,13 @@ def test_titration_workbench_integration_in_main_window(window):
     assert "TITRE" in window.lab_metric_labels
     assert window.lab_metric_labels["TITRE"].text() == "1.10 mL"
 
+
+def test_chemistry_practical_detail_launches_interactive_titration(window):
+    window._open_practical_detail("o-level", 2, "o-02-choose-an-acid-base-indicator")
+    assert not window.chemistry_detail_launch_sim_button.isHidden()
+
+    window.chemistry_detail_launch_sim_button.click()
+    assert window.active_experiment is not None
+    assert window.active_experiment.identifier == "titration"
+    assert window.content_stack.currentWidget() is window.lab_detail_page
+
