@@ -529,44 +529,71 @@ def build_stylesheet() -> str:
     }
 
     #modelBar {
-        background: rgba(5, 24, 21, 0.72);
-        border: 1px solid rgba(64, 208, 176, 0.22);
-        border-radius: 10px;
-        padding: 6px 10px;
-    }
-
-    #chatRail #modelBar {
-        padding: 8px;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(6, 26, 22, 0.95), stop:1 rgba(9, 36, 30, 0.95));
+        border: 1px solid rgba(81, 204, 175, 0.4);
+        border-radius: 12px;
+        padding: 8px 12px;
     }
 
     #modelEyebrow {
-        color: #70bea3;
-        font-size: 9px;
+        background: rgba(14, 56, 46, 0.9);
+        border: 1px solid rgba(81, 204, 175, 0.45);
+        border-radius: 6px;
+        color: #6cf5c2;
+        font-size: 10px;
         font-weight: 800;
+        letter-spacing: 0.12em;
+        padding: 4px 8px;
+    }
+
+    #modelSelector {
+        background: rgba(6, 24, 20, 0.95);
+        border: 1.5px solid rgba(81, 204, 175, 0.45);
+        border-radius: 8px;
+        color: #ffffff;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 7px 30px 7px 12px;
+        min-width: 220px;
+    }
+
+    #modelSelector:hover {
+        border-color: rgba(125, 255, 214, 0.85);
+        background: rgba(9, 36, 30, 0.98);
+    }
+
+    #modelSelector:focus {
+        border: 2px solid #57fabc;
     }
 
     #modelDetail {
-        color: #90b8a7;
-        font-size: 10px;
-    }
-
-    #chatRail #modelDetail {
-        padding: 2px 0;
+        color: #b0e3d2;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 0 4px;
     }
 
     #modelReconnectButton {
-        background: rgba(11, 48, 39, 0.9);
-        border: 1px solid rgba(83, 200, 171, 0.36);
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(16, 68, 54, 0.95), stop:1 rgba(10, 48, 38, 0.95));
+        border: 1px solid rgba(89, 220, 180, 0.5);
         border-radius: 8px;
-        color: #b7efd9;
-        padding: 8px 11px;
-        font-size: 10px;
+        color: #bbf8e1;
+        padding: 7px 14px;
+        font-size: 11px;
         font-weight: 700;
+        letter-spacing: 0.04em;
     }
 
     #modelReconnectButton:hover {
-        background: rgba(16, 68, 53, 0.96);
-        border-color: #69efb5;
+        background: rgba(22, 90, 72, 0.98);
+        border-color: #57fabc;
+        color: #ffffff;
+    }
+
+    #modelReconnectButton:disabled {
+        background: rgba(10, 30, 25, 0.5);
+        border-color: rgba(60, 120, 100, 0.3);
+        color: #6e9484;
     }
 
     QComboBox::drop-down {
@@ -578,7 +605,20 @@ def build_stylesheet() -> str:
         background: #06231e;
         color: #e6fff6;
         selection-background-color: #0b6551;
-        border: 1px solid #287d69;
+        border: 1.5px solid #287d69;
+        border-radius: 8px;
+        padding: 4px;
+        outline: none;
+    }
+
+    QComboBox QAbstractItemView::item {
+        min-height: 28px;
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    QComboBox QAbstractItemView::item:hover {
+        background: rgba(20, 80, 65, 0.85);
     }
 
     #sendButton {
@@ -1196,22 +1236,26 @@ class MainWindow(QMainWindow):
         model_bar = QWidget()
         model_bar.setObjectName("modelBar")
         model_layout = QHBoxLayout(model_bar)
-        model_layout.setContentsMargins(8, 4, 8, 4)
-        model_layout.setSpacing(10)
+        model_layout.setContentsMargins(12, 6, 12, 6)
+        model_layout.setSpacing(12)
 
-        model_eyebrow = QLabel("LOCAL MODEL")
+        model_eyebrow = QLabel("⚡ LOCAL MODEL")
         model_eyebrow.setObjectName("modelEyebrow")
         model_layout.addWidget(model_eyebrow)
 
         self.model_selector = QComboBox()
         self.model_selector.setObjectName("modelSelector")
         self.model_selector.setAccessibleName("Choose a local language model")
-        self.model_selector.setMinimumWidth(210)
-        self.model_selector.setMinimumContentsLength(18)
+        self.model_selector.setMinimumWidth(230)
+        self.model_selector.setMinimumContentsLength(20)
         self.model_selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         for option in MODEL_OPTIONS:
-            self.model_selector.addItem(option.name, option.model_id)
-            self.model_selector.setItemData(self.model_selector.count() - 1, f"{option.description} · {option.quantization}", Qt.ToolTipRole)
+            self.model_selector.addItem(f"{option.icon}  {option.name}", option.model_id)
+            self.model_selector.setItemData(
+                self.model_selector.count() - 1,
+                f"{option.name} [{option.tag}]\n{option.description} · {option.quantization}",
+                Qt.ToolTipRole,
+            )
         saved_model_id = self.progress.get("model_id", "")
         saved_model_index = self.model_selector.findData(saved_model_id)
         if saved_model_index >= 0:
