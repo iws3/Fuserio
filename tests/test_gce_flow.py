@@ -3,6 +3,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 import localchat.app as app_module
@@ -103,6 +104,11 @@ def test_startup_offers_levels_and_sidebar_links_switch_workspaces(window):
     assert hasattr(window, "window_minimize_button")
     assert hasattr(window, "window_maximize_button")
     assert hasattr(window, "window_close_button")
+    flags = int(window.windowFlags())
+    assert flags & int(Qt.WindowMaximizeButtonHint)
+    assert flags & int(Qt.WindowMinimizeButtonHint)
+    assert flags & int(Qt.WindowCloseButtonHint)
+    assert not (flags & int(Qt.CustomizeWindowHint))
     assert window.window_maximize_button.toolTip() == "Maximize"
     assert window.window_maximize_button.text() == "▢"
     window._toggle_window_maximize()

@@ -877,12 +877,11 @@ class MainWindow(QMainWindow):
         self.resize(1440, 900)
         self.setWindowFlags(
             Qt.Window
-            | Qt.CustomizeWindowHint
             | Qt.WindowTitleHint
             | Qt.WindowSystemMenuHint
-            | Qt.WindowMinimizeButtonHint
-            | Qt.WindowMaximizeButtonHint
+            | Qt.WindowMinMaxButtonsHint
             | Qt.WindowCloseButtonHint
+            | Qt.WindowFullscreenButtonHint
         )
         self.setStyleSheet(build_stylesheet())
         self.logo_path = os.path.join(
