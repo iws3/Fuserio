@@ -440,7 +440,7 @@ def test_experiment_gallery_reflows_cards_when_window_resizes(window):
         for index in range(narrow_count)
     ) + 1
 
-    assert card_count == narrow_count == 5
+    assert card_count == narrow_count == 6
     assert narrow_columns <= wide_columns
 
 

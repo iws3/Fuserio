@@ -191,3 +191,205 @@ def test_titration_paints_apparatus_at_equivalence():
     assert img.width() == 720
     assert img.height() == 480
     canvas.close()
+
+
+def test_reaction_rate_interactive_actions_and_measurements():
+    app()
+    canvas = LabCanvas()
+    experiment = experiment_by_id("reaction-rate")
+    assert experiment is not None
+    canvas.set_experiment(experiment)
+
+    m = canvas.measurements()
+    assert m["GAS VOLUME"] == "0.0 cm³"
+    assert m["STATUS"] == "Ready"
+    assert "RATE" in m
+    assert "TEMP" in m
+    assert "ACID CONC" in m
+    assert "REACTANT" in m
+
+    # Add acid increases concentration
+    initial_conc = int(canvas.parameters.get("concentration", 50))
+    canvas.reaction_rate_action("add_acid")
+    assert int(canvas.parameters["concentration"]) == initial_conc + 10
+    assert canvas.reaction_effervescence > 0
+
+    # Add reactant increases mass
+    initial_mass = int(canvas.parameters.get("mass", 3))
+    canvas.reaction_rate_action("add_reactant")
+    assert int(canvas.parameters["mass"]) == initial_mass + 1
+
+    # Heat increases temperature
+    initial_temp = int(canvas.parameters.get("temperature", 25))
+    canvas.reaction_rate_action("heat")
+    assert int(canvas.parameters["temperature"]) == initial_temp + 10
+
+    # Cool decreases temperature
+    canvas.reaction_rate_action("cool")
+    assert int(canvas.parameters["temperature"]) == initial_temp
+
+    # Add catalyst
+    canvas.reaction_rate_action("add_catalyst")
+    assert canvas.reaction_catalyst is True
+    assert canvas.reaction_effervescence == 1.0
+
+    # Flush syringe resets state
+    canvas.reaction_rate_action("flush_syringe")
+    assert canvas.reaction_gas_ml == 0.0
+    assert canvas.reaction_rate_val == 0.0
+    assert canvas.reaction_catalyst is False
+    assert not canvas.running
+
+    canvas.close()
+
+
+def test_reaction_rate_paints_offscreen():
+    app()
+    canvas = LabCanvas()
+    canvas.resize(720, 480)
+    experiment = experiment_by_id("reaction-rate")
+    assert experiment is not None
+    canvas.set_experiment(experiment)
+    canvas.reaction_rate_action("add_acid")
+    canvas.play()
+    canvas._tick()
+    canvas._tick()
+
+    img = canvas.grab().toImage()
+    assert not img.isNull()
+    assert img.width() == 720
+    assert img.height() == 480
+    canvas.close()
+
+
+def test_salt_solubility_interactive_actions_and_measurements():
+    app()
+    canvas = LabCanvas()
+    experiment = experiment_by_id("salt-solubility")
+    assert experiment is not None
+    canvas.set_experiment(experiment)
+
+    m = canvas.measurements()
+    assert "TEMP" in m
+    assert "WATER" in m
+    assert "DISSOLVED" in m
+    assert "CRYSTALS" in m
+    assert "STATUS" in m
+    assert "LIMIT" in m
+
+    # Add salt
+    initial_salt = int(canvas.parameters.get("salt", 25))
+    canvas.salt_solubility_action("add_salt")
+    assert int(canvas.parameters["salt"]) == initial_salt + 5
+
+    # Add water
+    initial_water = int(canvas.parameters.get("water", 100))
+    canvas.salt_solubility_action("add_water")
+    assert int(canvas.parameters["water"]) == initial_water + 25
+
+    # Heat lights burner and increases temperature
+    initial_temp = int(canvas.parameters.get("temperature", 25))
+    canvas.salt_solubility_action("heat")
+    assert canvas.solubility_burner_lit is True
+    assert int(canvas.parameters["temperature"]) == initial_temp + 15
+
+    # Cool decreases temperature
+    canvas.salt_solubility_action("cool")
+    assert int(canvas.parameters["temperature"]) == initial_temp + 5
+
+    # Toggle burner
+    was_lit = canvas.solubility_burner_lit
+    canvas.salt_solubility_action("toggle_burner")
+    assert canvas.solubility_burner_lit != was_lit
+
+    # Stir solution
+    canvas.salt_solubility_action("stir")
+    assert canvas.solubility_stir_intensity == 1.0
+
+    # Reset returns to defaults
+    canvas.salt_solubility_action("reset")
+    assert canvas.solubility_burner_lit is True
+    assert canvas.solubility_stir_intensity == 0.0
+    assert not canvas.running
+
+    canvas.close()
+
+
+def test_salt_solubility_paints_offscreen():
+    app()
+    canvas = LabCanvas()
+    canvas.resize(720, 480)
+    experiment = experiment_by_id("salt-solubility")
+    assert experiment is not None
+    canvas.set_experiment(experiment)
+    canvas.salt_solubility_action("heat")
+    canvas.salt_solubility_action("stir")
+    canvas.play()
+    canvas._tick()
+
+    img = canvas.grab().toImage()
+    assert not img.isNull()
+    assert img.width() == 720
+    assert img.height() == 480
+    canvas.close()
+
+
+def test_precipitation_salts_interactive_actions_and_measurements():
+    app()
+    canvas = LabCanvas()
+    experiment = experiment_by_id("precipitation-salts")
+    assert experiment is not None
+    canvas.set_experiment(experiment)
+
+    m = canvas.measurements()
+    assert "PRECIPITATE" in m
+    assert "FILTRATE" in m
+    assert "WASHES" in m
+    assert "PURITY" in m
+    assert "STATUS" in m
+
+    # Mix reagents
+    canvas.precipitation_salts_action("mix_reagents")
+    assert canvas.precip_mixed is True
+
+    # Pour into funnel starts running
+    canvas.precipitation_salts_action("pour_funnel")
+    assert canvas.precip_poured is True
+    assert canvas.running is True
+
+    # Wash increments wash count
+    initial_washes = canvas.precip_wash_count
+    canvas.precipitation_salts_action("wash")
+    assert canvas.precip_wash_count == initial_washes + 1
+
+    # Collect yield
+    canvas.precipitation_salts_action("collect")
+    assert canvas.precip_filtrate_ml > 0
+    assert not canvas.running
+
+    # Reset returns to defaults
+    canvas.precipitation_salts_action("reset")
+    assert canvas.precip_filtrate_ml == 0.0
+    assert canvas.precip_drip_phase == 0.0
+    assert canvas.precip_wash_count == 2
+    assert not canvas.running
+
+    canvas.close()
+
+
+def test_precipitation_salts_paints_offscreen():
+    app()
+    canvas = LabCanvas()
+    canvas.resize(720, 480)
+    experiment = experiment_by_id("precipitation-salts")
+    assert experiment is not None
+    canvas.set_experiment(experiment)
+    canvas.precipitation_salts_action("pour_funnel")
+    canvas._tick()
+    canvas._tick()
+
+    img = canvas.grab().toImage()
+    assert not img.isNull()
+    assert img.width() == 720
+    assert img.height() == 480
+    canvas.close()

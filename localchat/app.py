@@ -2535,6 +2535,182 @@ class MainWindow(QMainWindow):
 
             self.lab_controls_layout.addWidget(workbench)
 
+        elif experiment.identifier == "reaction-rate":
+            workbench = QWidget()
+            workbench.setObjectName("reactionRateWorkbench")
+            wb_layout = QVBoxLayout(workbench)
+            wb_layout.setContentsMargins(0, 0, 0, 8)
+            wb_layout.setSpacing(6)
+
+            title_label = QLabel("🧪 REACTION WORKBENCH (GAS SYRINGE KINETICS)")
+            title_label.setObjectName("labControlLabel")
+            title_label.setStyleSheet("font-weight: bold; color: #57fabc; font-size: 11px;")
+            wb_layout.addWidget(title_label)
+
+            row1 = QHBoxLayout()
+            row1.setSpacing(6)
+            acid_btn = QPushButton("🧪 Add Acid (+10%)")
+            acid_btn.setObjectName("studyModeButton")
+            acid_btn.setToolTip("Increase hydrochloric acid concentration by 10%")
+            acid_btn.clicked.connect(lambda _=False: self._reaction_rate_action("add_acid"))
+
+            reactant_btn = QPushButton("🧂 Add Reactant (+1g)")
+            reactant_btn.setObjectName("studyModeButton")
+            reactant_btn.setToolTip("Add 1 g of solid reactant (CaCO3 / Mg ribbons)")
+            reactant_btn.clicked.connect(lambda _=False: self._reaction_rate_action("add_reactant"))
+
+            cat_btn = QPushButton("⚡ Add Catalyst")
+            cat_btn.setObjectName("studyModeButton")
+            cat_btn.setStyleSheet("color: #ffbc74; font-weight: bold;")
+            cat_btn.setToolTip("Add catalyst powder to lower activation energy barrier")
+            cat_btn.clicked.connect(lambda _=False: self._reaction_rate_action("add_catalyst"))
+
+            row1.addWidget(acid_btn)
+            row1.addWidget(reactant_btn)
+            row1.addWidget(cat_btn)
+            wb_layout.addLayout(row1)
+
+            row2 = QHBoxLayout()
+            row2.setSpacing(6)
+            heat_btn = QPushButton("🔥 Heat (+10°C)")
+            heat_btn.setObjectName("studyModeButton")
+            heat_btn.setToolTip("Warm reaction mixture to increase kinetic collision frequency")
+            heat_btn.clicked.connect(lambda _=False: self._reaction_rate_action("heat"))
+
+            cool_btn = QPushButton("❄ Cool (-10°C)")
+            cool_btn.setObjectName("studyModeButton")
+            cool_btn.setToolTip("Cool reaction mixture to decrease molecular collision frequency")
+            cool_btn.clicked.connect(lambda _=False: self._reaction_rate_action("cool"))
+
+            flush_btn = QPushButton("↺ Flush Syringe")
+            flush_btn.setObjectName("studyModeButton")
+            flush_btn.setToolTip("Reset syringe gas volume and empty reaction vessel")
+            flush_btn.clicked.connect(lambda _=False: self._reaction_rate_action("flush_syringe"))
+
+            row2.addWidget(heat_btn)
+            row2.addWidget(cool_btn)
+            row2.addWidget(flush_btn)
+            wb_layout.addLayout(row2)
+
+            self.lab_controls_layout.addWidget(workbench)
+
+        elif experiment.identifier == "salt-solubility":
+            workbench = QWidget()
+            workbench.setObjectName("saltSolubilityWorkbench")
+            wb_layout = QVBoxLayout(workbench)
+            wb_layout.setContentsMargins(0, 0, 0, 8)
+            wb_layout.setSpacing(6)
+
+            title_label = QLabel("🔥 THERMAL SOLUBILITY WORKBENCH (BUNSEN & BEAKER)")
+            title_label.setObjectName("labControlLabel")
+            title_label.setStyleSheet("font-weight: bold; color: #57fabc; font-size: 11px;")
+            wb_layout.addWidget(title_label)
+
+            row1 = QHBoxLayout()
+            row1.setSpacing(6)
+            salt_btn = QPushButton("🧂 Add Salt (+5g)")
+            salt_btn.setObjectName("studyModeButton")
+            salt_btn.setToolTip("Add 5 g of potassium chlorate solute to the beaker")
+            salt_btn.clicked.connect(lambda _=False: self._salt_solubility_action("add_salt"))
+
+            water_btn = QPushButton("💧 Add Water (+25 mL)")
+            water_btn.setObjectName("studyModeButton")
+            water_btn.setToolTip("Add 25 mL solvent to increase saturation threshold")
+            water_btn.clicked.connect(lambda _=False: self._salt_solubility_action("add_water"))
+
+            stir_btn = QPushButton("🌀 Stir Solution")
+            stir_btn.setObjectName("studyModeButton")
+            stir_btn.setToolTip("Stir beaker contents with glass stirring rod")
+            stir_btn.clicked.connect(lambda _=False: self._salt_solubility_action("stir"))
+
+            row1.addWidget(salt_btn)
+            row1.addWidget(water_btn)
+            row1.addWidget(stir_btn)
+            wb_layout.addLayout(row1)
+
+            row2 = QHBoxLayout()
+            row2.setSpacing(6)
+            heat_btn = QPushButton("🔥 Heat (+15°C)")
+            heat_btn.setObjectName("studyModeButton")
+            heat_btn.setToolTip("Heat beaker over Bunsen burner to increase temperature")
+            heat_btn.clicked.connect(lambda _=False: self._salt_solubility_action("heat"))
+
+            cool_btn = QPushButton("❄ Cool (-10°C)")
+            cool_btn.setObjectName("studyModeButton")
+            cool_btn.setToolTip("Allow solution to cool down and crystallise solute")
+            cool_btn.clicked.connect(lambda _=False: self._salt_solubility_action("cool"))
+
+            burner_btn = QPushButton("🔥 Toggle Burner")
+            burner_btn.setObjectName("studyModeButton")
+            burner_btn.setToolTip("Ignite or extinguish the Bunsen burner flame")
+            burner_btn.clicked.connect(lambda _=False: self._salt_solubility_action("toggle_burner"))
+
+            filter_btn = QPushButton("↺ Filter Crystals")
+            filter_btn.setObjectName("studyModeButton")
+            filter_btn.setToolTip("Filter out precipitated crystals at beaker bottom")
+            filter_btn.clicked.connect(lambda _=False: self._salt_solubility_action("filter_crystals"))
+
+            row2.addWidget(heat_btn)
+            row2.addWidget(cool_btn)
+            row2.addWidget(burner_btn)
+            row2.addWidget(filter_btn)
+            wb_layout.addLayout(row2)
+
+            self.lab_controls_layout.addWidget(workbench)
+
+        elif experiment.identifier == "precipitation-salts":
+            workbench = QWidget()
+            workbench.setObjectName("precipitationSaltsWorkbench")
+            wb_layout = QVBoxLayout(workbench)
+            wb_layout.setContentsMargins(0, 0, 0, 8)
+            wb_layout.setSpacing(6)
+
+            title_label = QLabel("🧪 SALT PREPARATION & FILTRATION WORKBENCH")
+            title_label.setObjectName("labControlLabel")
+            title_label.setStyleSheet("font-weight: bold; color: #57fabc; font-size: 11px;")
+            wb_layout.addWidget(title_label)
+
+            row1 = QHBoxLayout()
+            row1.setSpacing(6)
+            mix_btn = QPushButton("🧪 Mix Reagents")
+            mix_btn.setObjectName("studyModeButton")
+            mix_btn.setToolTip("Mix BaCl2 and Na2SO4 solutions together to precipitate insoluble BaSO4")
+            mix_btn.clicked.connect(lambda _=False: self._precipitation_salts_action("mix_reagents"))
+
+            pour_btn = QPushButton("💧 Pour into Funnel")
+            pour_btn.setObjectName("studyModeButton")
+            pour_btn.setStyleSheet("color: #57fabc; font-weight: bold;")
+            pour_btn.setToolTip("Pour the precipitate mixture into the filter cone")
+            pour_btn.clicked.connect(lambda _=False: self._precipitation_salts_action("pour_funnel"))
+
+            row1.addWidget(mix_btn)
+            row1.addWidget(pour_btn)
+            wb_layout.addLayout(row1)
+
+            row2 = QHBoxLayout()
+            row2.setSpacing(6)
+            wash_btn = QPushButton("🚿 Rinse with Wash Bottle (+1)")
+            wash_btn.setObjectName("studyModeButton")
+            wash_btn.setToolTip("Rinse precipitate with distilled water to remove soluble NaCl impurities")
+            wash_btn.clicked.connect(lambda _=False: self._precipitation_salts_action("wash"))
+
+            collect_btn = QPushButton("★ Collect Yield")
+            collect_btn.setObjectName("studyModeButton")
+            collect_btn.setToolTip("Complete filtration and calculate dry purified salt yield")
+            collect_btn.clicked.connect(lambda _=False: self._precipitation_salts_action("collect"))
+
+            reset_btn = QPushButton("↺ Reset Setup")
+            reset_btn.setObjectName("studyModeButton")
+            reset_btn.setToolTip("Reset reagents and prepare fresh apparatus")
+            reset_btn.clicked.connect(lambda _=False: self._precipitation_salts_action("reset"))
+
+            row2.addWidget(wash_btn)
+            row2.addWidget(collect_btn)
+            row2.addWidget(reset_btn)
+            wb_layout.addLayout(row2)
+
+            self.lab_controls_layout.addWidget(workbench)
+
         for parameter in experiment.parameters:
             row = QWidget()
             row_layout = QVBoxLayout(row)
@@ -2562,28 +2738,43 @@ class MainWindow(QMainWindow):
             self.lab_controls_layout.addWidget(row)
 
     def _sync_lab_runtime(self):
-        if self.active_experiment and self.active_experiment.identifier == "titration":
-            vol = float(self.lab_canvas.parameters.get("volume", 0))
-            if "volume" in self.lab_parameter_sliders:
-                slider = self.lab_parameter_sliders["volume"]
-                slider.blockSignals(True)
-                slider.setValue(int(vol))
-                slider.blockSignals(False)
-            if "volume" in self.lab_parameter_labels:
-                self.lab_parameter_labels["volume"].setText(f"{vol:.1f} mL")
+        if self.active_experiment:
+            if self.active_experiment.identifier == "titration":
+                vol = float(self.lab_canvas.parameters.get("volume", 0))
+                if "volume" in self.lab_parameter_sliders:
+                    slider = self.lab_parameter_sliders["volume"]
+                    slider.blockSignals(True)
+                    slider.setValue(int(vol))
+                    slider.blockSignals(False)
+                if "volume" in self.lab_parameter_labels:
+                    self.lab_parameter_labels["volume"].setText(f"{vol:.1f} mL")
+            for key, slider in self.lab_parameter_sliders.items():
+                if key in self.lab_canvas.parameters:
+                    val = int(self.lab_canvas.parameters[key])
+                    if slider.value() != val:
+                        slider.blockSignals(True)
+                        slider.setValue(val)
+                        slider.blockSignals(False)
+                        if key in self.lab_parameter_labels:
+                            unit = next((p.unit for p in self.active_experiment.parameters if p.key == key), "")
+                            self.lab_parameter_labels[key].setText(f"{val} {unit}".strip())
         self._update_lab_metrics()
 
     def _titration_action(self, action: str):
         self.lab_canvas.titration_action(action)
-        vol = float(self.lab_canvas.parameters.get("volume", 0))
-        if "volume" in self.lab_parameter_sliders:
-            slider = self.lab_parameter_sliders["volume"]
-            slider.blockSignals(True)
-            slider.setValue(int(vol))
-            slider.blockSignals(False)
-        if "volume" in self.lab_parameter_labels:
-            self.lab_parameter_labels["volume"].setText(f"{vol:.1f} mL")
-        self._update_lab_metrics()
+        self._sync_lab_runtime()
+
+    def _reaction_rate_action(self, action: str):
+        self.lab_canvas.reaction_rate_action(action)
+        self._sync_lab_runtime()
+
+    def _salt_solubility_action(self, action: str):
+        self.lab_canvas.salt_solubility_action(action)
+        self._sync_lab_runtime()
+
+    def _precipitation_salts_action(self, action: str):
+        self.lab_canvas.precipitation_salts_action(action)
+        self._sync_lab_runtime()
 
     def _add_playground_item(self, item: str):
         self.lab_canvas.add_playground_item(item)
@@ -2633,7 +2824,7 @@ class MainWindow(QMainWindow):
         else:
             self.lab_canvas.reset()
             self.lab_play_button.setText("▶  Run simulation")
-        self._update_lab_metrics()
+        self._sync_lab_runtime()
 
     def _schedule_lab_notes_save(self):
         self.lab_notes_save_timer.start(300)

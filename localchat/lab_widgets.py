@@ -43,6 +43,25 @@ class LabCanvas(QWidget):
         self.titration_swirl_intensity: float = 0.0
         self.titration_transient_flash: float = 0.0
         self.titration_drop_progress: float = 0.0
+
+        # Realistic Reaction Rate Laboratory State (Gas Syringe)
+        self.reaction_gas_ml: float = 0.0
+        self.reaction_rate_val: float = 0.0
+        self.reaction_catalyst: bool = False
+        self.reaction_effervescence: float = 0.0
+
+        # Realistic Salt Solubility Laboratory State (Tripod & Burner)
+        self.solubility_burner_lit: bool = True
+        self.solubility_stir_intensity: float = 0.0
+        self.solubility_dissolved_g: float = 0.0
+
+        # Realistic Salt Preparation & Filtration State
+        self.precip_mixed: bool = True
+        self.precip_poured: bool = True
+        self.precip_filtrate_ml: float = 0.0
+        self.precip_drip_phase: float = 0.0
+        self.precip_wash_count: int = 2
+
         self._tick_counter = 0
 
         self.timer = QTimer(self)
@@ -65,6 +84,21 @@ class LabCanvas(QWidget):
             self.titration_swirl_intensity = 0.0
             self.titration_transient_flash = 0.0
             self.titration_drop_progress = 0.0
+        elif experiment.identifier == "reaction-rate":
+            self.reaction_gas_ml = 0.0
+            self.reaction_rate_val = 0.0
+            self.reaction_catalyst = False
+            self.reaction_effervescence = 0.0
+        elif experiment.identifier == "salt-solubility":
+            self.solubility_burner_lit = True
+            self.solubility_stir_intensity = 0.0
+            self.solubility_dissolved_g = 0.0
+        elif experiment.identifier == "precipitation-salts":
+            self.precip_mixed = True
+            self.precip_poured = True
+            self.precip_filtrate_ml = 0.0
+            self.precip_drip_phase = 0.0
+            self.precip_wash_count = int(self.parameters.get("wash_count", 2))
         self.elapsed = 0.0
         self.running = False
         self.timer.stop()
@@ -184,17 +218,122 @@ class LabCanvas(QWidget):
         self.update()
         self.metrics_updated.emit()
 
+    def reaction_rate_action(self, action: str):
+        if not self.experiment or self.experiment.identifier != "reaction-rate":
+            return
+        if action == "add_acid":
+            conc = min(100, int(self.parameters.get("concentration", 50)) + 10)
+            self.parameters["concentration"] = conc
+            self.reaction_effervescence = min(1.0, self.reaction_effervescence + 0.4)
+        elif action == "add_reactant":
+            mass = min(10, int(self.parameters.get("mass", 3)) + 1)
+            self.parameters["mass"] = mass
+            self.reaction_effervescence = min(1.0, self.reaction_effervescence + 0.5)
+        elif action == "heat":
+            temp = min(80, int(self.parameters.get("temperature", 25)) + 10)
+            self.parameters["temperature"] = temp
+        elif action == "cool":
+            temp = max(10, int(self.parameters.get("temperature", 25)) - 10)
+            self.parameters["temperature"] = temp
+        elif action == "add_catalyst":
+            self.reaction_catalyst = True
+            self.reaction_effervescence = 1.0
+        elif action == "flush_syringe":
+            self.reaction_gas_ml = 0.0
+            self.reaction_rate_val = 0.0
+            self.reaction_catalyst = False
+            self.reaction_effervescence = 0.0
+            self.pause()
+        self.update()
+        self.metrics_updated.emit()
+
+    def salt_solubility_action(self, action: str):
+        if not self.experiment or self.experiment.identifier != "salt-solubility":
+            return
+        if action == "add_salt":
+            self.parameters["salt"] = min(100, int(self.parameters.get("salt", 25)) + 5)
+        elif action == "add_water":
+            self.parameters["water"] = min(200, int(self.parameters.get("water", 100)) + 25)
+        elif action == "heat":
+            self.solubility_burner_lit = True
+            self.parameters["temperature"] = min(90, int(self.parameters.get("temperature", 25)) + 15)
+        elif action == "cool":
+            self.parameters["temperature"] = max(10, int(self.parameters.get("temperature", 25)) - 10)
+        elif action == "toggle_burner":
+            self.solubility_burner_lit = not getattr(self, "solubility_burner_lit", True)
+        elif action == "stir":
+            self.solubility_stir_intensity = 1.0
+        elif action == "filter_crystals":
+            water = float(self.parameters.get("water", 100))
+            temp = float(self.parameters.get("temperature", 25))
+            limit = water * (0.35 + 0.003 * max(0.0, temp - 20.0))
+            self.parameters["salt"] = int(min(self.parameters.get("salt", 25), limit))
+        elif action == "reset":
+            self.parameters["salt"] = 25
+            self.parameters["water"] = 100
+            self.parameters["temperature"] = 25
+            self.solubility_burner_lit = True
+            self.solubility_stir_intensity = 0.0
+            self.solubility_dissolved_g = 0.0
+            self.pause()
+        self.update()
+        self.metrics_updated.emit()
+
+    def precipitation_salts_action(self, action: str):
+        if not self.experiment or self.experiment.identifier != "precipitation-salts":
+            return
+        if action == "mix_reagents":
+            self.precip_mixed = True
+            self.precip_poured = False
+        elif action == "pour_funnel":
+            self.precip_poured = True
+            self.running = True
+            self.timer.start()
+        elif action == "wash":
+            washes = min(5, int(self.parameters.get("wash_count", 2)) + 1)
+            self.parameters["wash_count"] = washes
+            self.precip_wash_count = washes
+        elif action == "collect":
+            self.precip_filtrate_ml = float(self.parameters.get("reagent_a", 25) + self.parameters.get("reagent_b", 25))
+            self.pause()
+        elif action == "reset":
+            self.precip_mixed = True
+            self.precip_poured = True
+            self.precip_filtrate_ml = 0.0
+            self.precip_drip_phase = 0.0
+            self.precip_wash_count = 2
+            self.parameters["wash_count"] = 2
+            self.pause()
+        self.update()
+        self.metrics_updated.emit()
+
     def reset(self):
         self.elapsed = 0.0
-        if self.experiment and self.experiment.identifier == "titration":
-            self.titration_analyte_ml = 25.0
-            self.titration_analyte_pipetted = True
-            self.titration_indicator_drops = 3
-            self.titration_water_wash_ml = 0.0
-            self.titration_swirl_intensity = 0.0
-            self.titration_transient_flash = 0.0
-            self.titration_drop_progress = 0.0
-            self.parameters["volume"] = 0
+        if self.experiment:
+            if self.experiment.identifier == "titration":
+                self.titration_analyte_ml = 25.0
+                self.titration_analyte_pipetted = True
+                self.titration_indicator_drops = 3
+                self.titration_water_wash_ml = 0.0
+                self.titration_swirl_intensity = 0.0
+                self.titration_transient_flash = 0.0
+                self.titration_drop_progress = 0.0
+                self.parameters["volume"] = 0
+            elif self.experiment.identifier == "reaction-rate":
+                self.reaction_gas_ml = 0.0
+                self.reaction_rate_val = 0.0
+                self.reaction_catalyst = False
+                self.reaction_effervescence = 0.0
+            elif self.experiment.identifier == "salt-solubility":
+                self.solubility_burner_lit = True
+                self.solubility_stir_intensity = 0.0
+                self.solubility_dissolved_g = 0.0
+            elif self.experiment.identifier == "precipitation-salts":
+                self.precip_mixed = True
+                self.precip_poured = True
+                self.precip_filtrate_ml = 0.0
+                self.precip_drip_phase = 0.0
+                self.precip_wash_count = int(self.parameters.get("wash_count", 2))
         self.pause()
         self.update()
         self.metrics_updated.emit()
@@ -202,30 +341,81 @@ class LabCanvas(QWidget):
     def _tick(self):
         self.elapsed += self.playback_rate / 30
         self._tick_counter += 1
-        if self.experiment and self.experiment.identifier == "titration":
-            if self.running:
-                d_vol = (0.45 * self.playback_rate) / 30.0
-                curr_vol = float(self.parameters.get("volume", 0))
-                new_vol = min(50.0, curr_vol + d_vol)
-                self.parameters["volume"] = new_vol
-                self.titration_drop_progress = (self.titration_drop_progress + 0.16 * self.playback_rate) % 1.0
-                conc = self.parameters.get("concentration", 50)
-                equiv = 25.0 * 50.0 / max(10, conc)
-                if abs(new_vol - equiv) < 2.0:
-                    self.titration_transient_flash = min(1.0, self.titration_transient_flash + 0.08)
-                if new_vol >= 50.0:
-                    self.pause()
-            else:
-                if self.titration_drop_progress > 0:
-                    self.titration_drop_progress = (self.titration_drop_progress + 0.15) % 1.0
-                    if self.titration_drop_progress < 0.1:
-                        self.titration_drop_progress = 0.0
+        if self.experiment:
+            if self.experiment.identifier == "titration":
+                if self.running:
+                    d_vol = (0.45 * self.playback_rate) / 30.0
+                    curr_vol = float(self.parameters.get("volume", 0))
+                    new_vol = min(50.0, curr_vol + d_vol)
+                    self.parameters["volume"] = new_vol
+                    self.titration_drop_progress = (self.titration_drop_progress + 0.16 * self.playback_rate) % 1.0
+                    conc = self.parameters.get("concentration", 50)
+                    equiv = 25.0 * 50.0 / max(10, conc)
+                    if abs(new_vol - equiv) < 2.0:
+                        self.titration_transient_flash = min(1.0, self.titration_transient_flash + 0.08)
+                    if new_vol >= 50.0:
+                        self.pause()
+                else:
+                    if self.titration_drop_progress > 0:
+                        self.titration_drop_progress = (self.titration_drop_progress + 0.15) % 1.0
+                        if self.titration_drop_progress < 0.1:
+                            self.titration_drop_progress = 0.0
 
-            if self.titration_swirl_intensity > 0:
-                self.titration_swirl_intensity = max(0.0, self.titration_swirl_intensity - 0.02)
-            if self.titration_transient_flash > 0:
-                decay = 0.025 + 0.05 * self.titration_swirl_intensity
-                self.titration_transient_flash = max(0.0, self.titration_transient_flash - decay)
+                if self.titration_swirl_intensity > 0:
+                    self.titration_swirl_intensity = max(0.0, self.titration_swirl_intensity - 0.02)
+                if self.titration_transient_flash > 0:
+                    decay = 0.025 + 0.05 * self.titration_swirl_intensity
+                    self.titration_transient_flash = max(0.0, self.titration_transient_flash - decay)
+
+            elif self.experiment.identifier == "reaction-rate":
+                temp = float(self.parameters.get("temperature", 25))
+                conc = float(self.parameters.get("concentration", 50))
+                mass = float(self.parameters.get("mass", 3))
+                max_gas = min(100.0, mass * 18.0)
+                cat_boost = 2.2 if getattr(self, "reaction_catalyst", False) else 1.0
+                rate_const = 0.06 * (temp / 25.0) * (conc / 50.0) * cat_boost
+                cur_gas = getattr(self, "reaction_gas_ml", 0.0)
+                if self.running:
+                    if cur_gas < max_gas:
+                        self.reaction_rate_val = rate_const * (1.0 - cur_gas / max_gas) * 1.5
+                        d_gas = self.reaction_rate_val * (self.playback_rate / 30.0)
+                        self.reaction_gas_ml = min(max_gas, cur_gas + d_gas)
+                        self.reaction_effervescence = min(1.0, self.reaction_effervescence + 0.08)
+                    else:
+                        self.reaction_rate_val = 0.0
+                        self.reaction_effervescence = max(0.0, self.reaction_effervescence - 0.04)
+                        self.pause()
+                else:
+                    self.reaction_effervescence = max(0.0, self.reaction_effervescence - 0.03)
+
+            elif self.experiment.identifier == "salt-solubility":
+                temp = float(self.parameters.get("temperature", 25))
+                water = float(self.parameters.get("water", 100))
+                salt = float(self.parameters.get("salt", 25))
+                limit = water * (0.35 + 0.003 * max(0.0, temp - 20.0))
+                stir = getattr(self, "solubility_stir_intensity", 0.0)
+                if stir > 0:
+                    self.solubility_stir_intensity = max(0.0, stir - 0.03)
+                target_dissolved = min(salt, limit)
+                cur_dissolved = getattr(self, "solubility_dissolved_g", 0.0)
+                rate = 0.15 if stir > 0 else 0.05
+                self.solubility_dissolved_g = cur_dissolved + (target_dissolved - cur_dissolved) * rate
+
+            elif self.experiment.identifier == "precipitation-salts":
+                if self.running and getattr(self, "precip_poured", True):
+                    vol_a = float(self.parameters.get("reagent_a", 25))
+                    vol_b = float(self.parameters.get("reagent_b", 25))
+                    target_filtrate = vol_a + vol_b - 5.0
+                    cur_filtrate = getattr(self, "precip_filtrate_ml", 0.0)
+                    if cur_filtrate < target_filtrate:
+                        self.precip_filtrate_ml = min(target_filtrate, cur_filtrate + 0.35 * self.playback_rate)
+                        self.precip_drip_phase = (self.precip_drip_phase + 0.14 * self.playback_rate) % 1.0
+                    else:
+                        self.precip_drip_phase = 0.0
+                        self.pause()
+                else:
+                    self.precip_drip_phase = 0.0
+
         self.update()
         if self._tick_counter % 3 == 0:
             self.metrics_updated.emit()
@@ -263,13 +453,49 @@ class LabCanvas(QWidget):
             }
         if experiment_id == "salt-solubility":
             water = p.get("water", 100)
-            salt = p.get("salt", 20)
-            temperature = p.get("temperature", 20)
-            dissolved = min(salt, water * (0.32 + temperature * 0.0007))
+            salt = p.get("salt", 25)
+            temperature = p.get("temperature", 25)
+            solubility_limit = water * (0.35 + 0.003 * max(0.0, temperature - 20.0))
+            dissolved = getattr(self, "solubility_dissolved_g", min(salt, solubility_limit))
+            solid_left = max(0.0, salt - dissolved)
+            state = "Unsaturated" if solid_left < 0.2 and dissolved < solubility_limit * 0.95 else ("Saturated" if solid_left < 0.2 else "Precipitated crystals")
             return {
+                "TEMP": f"{temperature} °C",
                 "WATER": f"{water} mL",
                 "DISSOLVED": f"{dissolved:.1f} g",
-                "SOLID LEFT": f"{max(0, salt - dissolved):.1f} g",
+                "CRYSTALS": f"{solid_left:.1f} g",
+                "LIMIT": f"{solubility_limit:.1f} g",
+                "STATUS": state,
+            }
+        if experiment_id == "reaction-rate":
+            temperature = p.get("temperature", 25)
+            concentration = p.get("concentration", 50)
+            mass = p.get("mass", 3)
+            gas_vol = getattr(self, "reaction_gas_ml", 0.0)
+            rate_val = getattr(self, "reaction_rate_val", 0.0)
+            max_gas = min(100.0, mass * 18.0)
+            status = "Reacting (Bubbling)" if rate_val > 0.01 else ("Exhausted (Complete)" if gas_vol >= max_gas - 0.5 and gas_vol > 0 else "Ready")
+            return {
+                "GAS VOLUME": f"{gas_vol:.1f} cm³",
+                "RATE": f"{rate_val:.2f} cm³/s",
+                "TEMP": f"{temperature} °C",
+                "ACID CONC": f"{concentration}%",
+                "REACTANT": f"{mass} g",
+                "STATUS": status,
+            }
+        if experiment_id == "precipitation-salts":
+            vol_a = p.get("reagent_a", 25)
+            vol_b = p.get("reagent_b", 25)
+            washes = getattr(self, "precip_wash_count", int(p.get("wash_count", 2)))
+            moles = min(vol_a, vol_b) * 0.1 / 1000.0
+            mass_precip = moles * 233.38
+            filtrate_vol = getattr(self, "precip_filtrate_ml", 0.0)
+            return {
+                "PRECIPITATE": f"{mass_precip:.2f} g BaSO₄",
+                "FILTRATE": f"{filtrate_vol:.1f} mL",
+                "WASHES": f"{washes} / 5",
+                "PURITY": "Analytical grade" if washes >= 2 else "Crude residue",
+                "STATUS": "Filtered & Washed" if washes >= 2 else "Filtration active",
             }
         if experiment_id == "projectile-motion":
             angle = math.radians(p.get("angle", 45))
@@ -302,11 +528,6 @@ class LabCanvas(QWidget):
             generations = p.get("generations", 20)
             frequency = min(99, 10 + pressure * generations / 25)
             return {"GENERATIONS": str(generations), "FAVOURED TRAIT": f"{frequency:.0f}%"}
-        if experiment_id == "reaction-rate":
-            temperature = p.get("temperature", 40)
-            concentration = p.get("concentration", 55)
-            rate = max(1, temperature * concentration / 30)
-            return {"TEMP": f"{temperature} °C", "COLLISIONS": f"{rate:.0f}/s"}
         if experiment_id == "titration":
             volume = float(p.get("volume", 0))
             flavor = flavor_by_id(TITRATION_FLAVORS[p.get("flavor", 0)].identifier)
@@ -550,13 +771,314 @@ class LabCanvas(QWidget):
         painter.drawLine(center, 55, center, bounds.height() - 48)
         self._caption(painter, f"GENERATION {int(progress * generations):02d} · TRAIT FREQUENCY SHIFTS", 22, bounds.height() - 18)
 
+    def _draw_equipment_label(
+        self,
+        painter: QPainter,
+        text: str,
+        target: QPointF,
+        label_pos: QPointF,
+        align: str = "left",
+    ):
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#57fabc"))
+        painter.drawEllipse(target, 2.5, 2.5)
+        painter.setPen(QPen(QColor(87, 250, 188, 130), 1))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(target, 5.0, 5.0)
+
+        leader_pen = QPen(QColor(87, 250, 188, 160), 1.0, Qt.DashLine)
+        painter.setPen(leader_pen)
+        path = QPainterPath()
+        path.moveTo(target)
+        elbow = QPointF(label_pos.x(), target.y()) if abs(label_pos.x() - target.x()) > 15 else target
+        path.lineTo(elbow)
+        path.lineTo(label_pos)
+        painter.drawPath(path)
+
+        f = QFont("sans-serif", 8, QFont.Bold)
+        painter.setFont(f)
+        fm = painter.fontMetrics()
+        tw = fm.horizontalAdvance(text) + 12
+        th = fm.height() + 5
+        if align == "left":
+            bx = label_pos.x()
+        elif align == "right":
+            bx = label_pos.x() - tw
+        else:
+            bx = label_pos.x() - tw / 2
+        bx = max(8.0, bx)
+        by = label_pos.y() - th / 2
+        badge = QRectF(bx, by, tw, th)
+
+        painter.setPen(QPen(QColor(87, 250, 188, 190), 1))
+        painter.setBrush(QColor(7, 28, 23, 235))
+        painter.drawRoundedRect(badge, 4, 4)
+
+        painter.setPen(QColor("#ffffff"))
+        painter.drawText(badge, Qt.AlignCenter, text)
+
     def _draw_reaction_rate(self, painter: QPainter, bounds):
-        temperature = self.parameters.get("temperature", 40)
-        concentration = self.parameters.get("concentration", 55)
-        energy = min(1.0, temperature / 75)
-        self._draw_reaction_particles(painter, bounds, energy, int(4 + concentration / 15))
-        collisions = int(self.elapsed * max(1, temperature * concentration / 1500)) if self.running else 0
-        self._caption(painter, f"EFFECTIVE COLLISIONS  {collisions:03d}", 24, bounds.height() - 18, AMBER)
+        temp = float(self.parameters.get("temperature", 25))
+        conc = float(self.parameters.get("concentration", 50))
+        mass = float(self.parameters.get("mass", 3))
+        gas_ml = float(getattr(self, "reaction_gas_ml", 0.0))
+        rate_val = float(getattr(self, "reaction_rate_val", 0.0))
+        effervescence = float(getattr(self, "reaction_effervescence", 0.0))
+        catalyst = bool(getattr(self, "reaction_catalyst", False))
+
+        W = bounds.width()
+        H = bounds.height()
+        bench_y = H - 38
+
+        # --- 1. Lab Bench Surface ---
+        bench_grad = QLinearGradient(0, bench_y, 0, H)
+        bench_grad.setColorAt(0, QColor("#132924"))
+        bench_grad.setColorAt(0.2, QColor("#0d1d19"))
+        bench_grad.setColorAt(1, QColor("#060e0c"))
+        painter.fillRect(QRectF(0, bench_y, W, H - bench_y), bench_grad)
+        painter.setPen(QPen(QColor("#275347"), 2))
+        painter.drawLine(QPointF(0, bench_y), QPointF(W, bench_y))
+        painter.setPen(QPen(QColor(104, 239, 178, 40), 1))
+        painter.drawLine(QPointF(0, bench_y + 2), QPointF(W, bench_y + 2))
+
+        # --- 2. Reaction Conical Flask (Left Side) ---
+        flask_cx = max(110.0, W * 0.24)
+        flask_h = min(125.0, max(85.0, (bench_y - 80) * 0.38))
+        flask_bottom_y = bench_y
+        flask_top_y = flask_bottom_y - flask_h
+        neck_h = flask_h * 0.22
+        neck_w = 28
+        base_w = 95
+
+        flask_path = QPainterPath()
+        flask_path.moveTo(flask_cx - neck_w / 2, flask_top_y)
+        flask_path.lineTo(flask_cx + neck_w / 2, flask_top_y)
+        flask_path.lineTo(flask_cx + neck_w / 2, flask_top_y + neck_h)
+        flask_path.lineTo(flask_cx + base_w / 2, flask_bottom_y - 6)
+        flask_path.quadTo(flask_cx + base_w / 2, flask_bottom_y, flask_cx + base_w / 2 - 8, flask_bottom_y)
+        flask_path.lineTo(flask_cx - base_w / 2 + 8, flask_bottom_y)
+        flask_path.quadTo(flask_cx - base_w / 2, flask_bottom_y, flask_cx - base_w / 2, flask_bottom_y - 6)
+        flask_path.lineTo(flask_cx - neck_w / 2, flask_top_y + neck_h)
+        flask_path.closeSubpath()
+
+        liquid_h = flask_h * 0.42
+        surface_y = flask_bottom_y - liquid_h
+        t_w = (surface_y - (flask_top_y + neck_h)) / max(1.0, (flask_bottom_y - 6) - (flask_top_y + neck_h))
+        surface_w = neck_w + t_w * (base_w - neck_w)
+
+        liquid_path = QPainterPath()
+        liquid_path.moveTo(flask_cx - surface_w / 2, surface_y)
+        liquid_path.lineTo(flask_cx + surface_w / 2, surface_y)
+        liquid_path.lineTo(flask_cx + base_w / 2, flask_bottom_y - 6)
+        liquid_path.quadTo(flask_cx + base_w / 2, flask_bottom_y, flask_cx + base_w / 2 - 8, flask_bottom_y)
+        liquid_path.lineTo(flask_cx - base_w / 2 + 8, flask_bottom_y)
+        liquid_path.quadTo(flask_cx - base_w / 2, flask_bottom_y, flask_cx - base_w / 2, flask_bottom_y - 6)
+        liquid_path.closeSubpath()
+
+        liq_grad = QLinearGradient(flask_cx - surface_w / 2, surface_y, flask_cx + surface_w / 2, flask_bottom_y)
+        liq_grad.setColorAt(0, QColor(48, 168, 148, 175))
+        liq_grad.setColorAt(0.5, QColor(36, 138, 120, 200))
+        liq_grad.setColorAt(1, QColor(22, 98, 85, 230))
+        painter.setBrush(liq_grad)
+        painter.setPen(Qt.NoPen)
+        painter.drawPath(liquid_path)
+
+        painter.setPen(QPen(QColor("#7e968f"), 1))
+        painter.setBrush(QColor("#a8c2b9"))
+        chip_y = flask_bottom_y - 5
+        for i in range(min(7, int(mass) + 2)):
+            cx_c = flask_cx - 24 + i * 8
+            painter.drawRoundedRect(QRectF(cx_c, chip_y - 4, 7, 4), 1, 1)
+
+        bubble_active = self.running or effervescence > 0.05
+        bubble_count = int(12 + (temp / 15.0) * (conc / 25.0) * (2 if catalyst else 1)) if bubble_active else 3
+        for bi in range(bubble_count):
+            bx_drift = math.sin(self.elapsed * 3.5 + bi * 1.7) * 8
+            b_x = flask_cx - surface_w * 0.35 + (bi * 17) % max(1, int(surface_w * 0.70)) + bx_drift
+            phase = (self.elapsed * (1.2 + (bi % 4) * 0.4) + bi * 0.22) % 1.0 if self.running else (bi * 0.17) % 1.0
+            b_y = flask_bottom_y - 8 - phase * (liquid_h - 10)
+            b_r = 1.5 + (bi % 3) * 0.8
+            painter.setPen(QPen(QColor(160, 255, 235, 180), 0.8))
+            painter.setBrush(QColor(220, 255, 245, 120))
+            painter.drawEllipse(QPointF(b_x, b_y), b_r, b_r)
+
+        painter.setPen(QPen(QColor(190, 255, 240, 220), 1.5))
+        painter.drawLine(QPointF(flask_cx - surface_w / 2 + 2, surface_y), QPointF(flask_cx + surface_w / 2 - 2, surface_y))
+
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor("#64b4a0"), 2))
+        painter.drawPath(flask_path)
+        painter.setPen(QPen(QColor(230, 255, 250, 160), 1.5))
+        painter.drawLine(QPointF(flask_cx - base_w / 2 + 10, flask_bottom_y - 8), QPointF(flask_cx - neck_w / 2 + 4, flask_top_y + neck_h + 8))
+
+        bung_top_y = flask_top_y - 8
+        bung_bot_y = flask_top_y + 10
+        bung_path = QPainterPath()
+        bung_path.moveTo(flask_cx - neck_w / 2 + 3, bung_bot_y)
+        bung_path.lineTo(flask_cx + neck_w / 2 - 3, bung_bot_y)
+        bung_path.lineTo(flask_cx + neck_w / 2 + 2, bung_top_y)
+        bung_path.lineTo(flask_cx - neck_w / 2 - 2, bung_top_y)
+        bung_path.closeSubpath()
+        bung_grad = QLinearGradient(flask_cx - neck_w / 2, bung_top_y, flask_cx + neck_w / 2, bung_bot_y)
+        bung_grad.setColorAt(0, QColor("#382f2a"))
+        bung_grad.setColorAt(0.5, QColor("#241e1b"))
+        bung_grad.setColorAt(1, QColor("#14100e"))
+        painter.setBrush(bung_grad)
+        painter.setPen(QPen(QColor("#4e423b"), 1))
+        painter.drawPath(bung_path)
+
+        tube_w = 4.5
+        tub_start_y = flask_top_y + 4
+        tub_rise_y = flask_top_y - 28
+        syr_cx_start = max(flask_cx + 85, W * 0.44)
+        syr_y = tub_rise_y + 24
+
+        tube_path = QPainterPath()
+        tube_path.moveTo(flask_cx, tub_start_y)
+        tube_path.lineTo(flask_cx, tub_rise_y)
+        tube_path.quadTo(flask_cx, tub_rise_y - 6, flask_cx + 6, tub_rise_y - 6)
+        tube_path.lineTo(syr_cx_start - 12, tub_rise_y - 6)
+        tube_path.quadTo(syr_cx_start, tub_rise_y - 6, syr_cx_start, tub_rise_y)
+        tube_path.lineTo(syr_cx_start, syr_y)
+
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor("#54a492"), tube_w + 1.2))
+        painter.drawPath(tube_path)
+        painter.setPen(QPen(QColor(180, 245, 230, 180), tube_w - 1.5))
+        painter.drawPath(tube_path)
+
+        # --- 3. Precision 100 cm³ Gas Syringe & Support Stand ---
+        stand_x = syr_cx_start + 45
+        s_rod_rect = QRectF(stand_x - 3, syr_y - 25, 6, bench_y - (syr_y - 25))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#3d564e"))
+        painter.drawRoundedRect(s_rod_rect, 2, 2)
+        painter.setBrush(QColor("#1b2c27"))
+        painter.drawRoundedRect(QRectF(stand_x - 30, bench_y - 8, 60, 8), 2, 2)
+        painter.setBrush(QColor("#274037"))
+        painter.setPen(QPen(QColor("#44695c"), 1))
+        painter.drawRoundedRect(QRectF(stand_x - 6, syr_y - 8, 12, 16), 2, 2)
+        painter.setPen(QPen(QColor("#c59b43"), 2))
+        painter.drawLine(QPointF(stand_x - 6, syr_y), QPointF(syr_cx_start + 35, syr_y))
+        painter.drawRoundedRect(QRectF(syr_cx_start + 35, syr_y - 14, 8, 28), 2, 2)
+
+        barrel_w = min(170.0, max(120.0, W - syr_cx_start - 65))
+        barrel_h = 24
+        barrel_rect = QRectF(syr_cx_start, syr_y - barrel_h / 2, barrel_w, barrel_h)
+
+        nozzle_rect = QRectF(syr_cx_start - 10, syr_y - 4, 10, 8)
+        painter.setPen(QPen(QColor("#5bb29e"), 1.2))
+        painter.setBrush(QColor(60, 140, 125, 120))
+        painter.drawRect(nozzle_rect)
+
+        b_grad = QLinearGradient(syr_cx_start, barrel_rect.top(), syr_cx_start, barrel_rect.bottom())
+        b_grad.setColorAt(0, QColor(40, 95, 85, 110))
+        b_grad.setColorAt(0.5, QColor(85, 175, 155, 60))
+        b_grad.setColorAt(1, QColor(30, 80, 70, 110))
+        painter.setBrush(b_grad)
+        painter.drawRoundedRect(barrel_rect, 3, 3)
+
+        plunger_stroke = barrel_w - 20
+        gas_frac = min(1.0, max(0.0, gas_ml / 100.0))
+        plunger_head_x = syr_cx_start + 10 + gas_frac * plunger_stroke
+        plunger_w = 45
+
+        if gas_frac > 0.01:
+            gas_rect = QRectF(syr_cx_start + 2, syr_y - (barrel_h / 2 - 2), plunger_head_x - (syr_cx_start + 2), barrel_h - 4)
+            gas_grad = QLinearGradient(gas_rect.left(), 0, gas_rect.right(), 0)
+            gas_grad.setColorAt(0, QColor(104, 239, 178, 60))
+            gas_grad.setColorAt(1, QColor(104, 239, 178, 110))
+            painter.setBrush(gas_grad)
+            painter.setPen(Qt.NoPen)
+            painter.drawRect(gas_rect)
+
+        painter.setPen(QPen(QColor("#3d786a"), 1.2))
+        painter.setBrush(QColor("#7ab5a6"))
+        painter.drawRoundedRect(QRectF(plunger_head_x - 2, syr_y - (barrel_h / 2 - 1), 5, barrel_h - 2), 1, 1)
+        shaft_rect = QRectF(plunger_head_x + 3, syr_y - 4, plunger_w - 6, 8)
+        painter.setBrush(QColor(160, 205, 195, 160))
+        painter.drawRect(shaft_rect)
+        disk_x = plunger_head_x + plunger_w
+        painter.setBrush(QColor("#5aa392"))
+        painter.drawRoundedRect(QRectF(disk_x - 3, syr_y - 12, 6, 24), 2, 2)
+
+        tick_f = QFont()
+        tick_f.setPixelSize(7)
+        painter.setFont(tick_f)
+        for cmi in range(0, 101, 10):
+            tx = syr_cx_start + 10 + (cmi / 100.0) * plunger_stroke
+            painter.setPen(QPen(QColor(140, 215, 195, 170), 1))
+            painter.drawLine(QPointF(tx, barrel_rect.top() + 2), QPointF(tx, barrel_rect.top() + 7))
+            if cmi % 20 == 0:
+                painter.setPen(QColor("#9ed4c6"))
+                painter.drawText(int(tx - 6), int(barrel_rect.bottom() + 9), str(cmi))
+
+        # --- 4. Digital Kinetics Stopwatch & HUD (Top Right) ---
+        hud_w = min(210.0, max(170.0, W - syr_cx_start - 20))
+        hud_h = 135
+        hud_x = max(syr_cx_start + 20, W - hud_w - 18)
+        hud_y = 22
+        hud_rect = QRectF(hud_x, hud_y, hud_w, hud_h)
+
+        h_grad = QLinearGradient(hud_x, hud_y, hud_x, hud_y + hud_h)
+        h_grad.setColorAt(0, QColor("#102521"))
+        h_grad.setColorAt(0.5, QColor("#0a1815"))
+        h_grad.setColorAt(1, QColor("#06100e"))
+        painter.setBrush(h_grad)
+        painter.setPen(QPen(QColor("#244a3f"), 1.5))
+        painter.drawRoundedRect(hud_rect, 10, 10)
+
+        painter.setFont(QFont("monospace", 8, QFont.Bold))
+        painter.setPen(QColor("#68efb2"))
+        painter.drawText(int(hud_x + 12), int(hud_y + 18), "GAS EVOLUTION MONITOR")
+
+        lcd_rect = QRectF(hud_x + 10, hud_y + 26, hud_w - 20, 36)
+        painter.setBrush(QColor("#030c0a"))
+        painter.setPen(QPen(QColor("#16382f"), 1.2))
+        painter.drawRoundedRect(lcd_rect, 5, 5)
+
+        painter.setFont(QFont("monospace", 17, QFont.Bold))
+        painter.setPen(QColor("#57fabc"))
+        painter.drawText(lcd_rect.adjusted(8, 0, -8, 0), Qt.AlignVCenter | Qt.AlignLeft, f"{gas_ml:05.1f}")
+        painter.setFont(QFont("sans-serif", 8, QFont.Bold))
+        painter.setPen(QColor("#7feec3"))
+        painter.drawText(lcd_rect.adjusted(0, 0, -8, -4), Qt.AlignVCenter | Qt.AlignRight, "cm³ GAS")
+
+        painter.setFont(QFont("sans-serif", 8))
+        painter.setPen(QColor("#a4d1c3"))
+        painter.drawText(int(hud_x + 12), int(hud_y + 78), f"RATE: {rate_val:.2f} cm³/s  ({temp:.0f}°C)")
+        painter.drawText(int(hud_x + 12), int(hud_y + 92), f"ACID: {conc:.0f}%  ·  SOLID: {mass:.0f} g")
+
+        stat_rect = QRectF(hud_x + 10, hud_y + 102, hud_w - 20, 22)
+        if rate_val > 0.01:
+            stat_col, stat_text = QColor(104, 239, 178, 40), "● EFFERVESCENCE ACTIVE"
+            stat_tcol = QColor("#57fabc")
+        elif gas_ml >= 99.0 or (mass > 0 and gas_ml > 0):
+            stat_col, stat_text = QColor(255, 193, 7, 40), "★ COMPLETE (EXHAUSTED)"
+            stat_tcol = QColor("#ffc107")
+        else:
+            stat_col, stat_text = QColor(64, 180, 160, 30), "Ⅱ READY FOR REACTION"
+            stat_tcol = QColor("#8fe6d4")
+        painter.setBrush(stat_col)
+        painter.setPen(QPen(stat_tcol, 1))
+        painter.drawRoundedRect(stat_rect, 4, 4)
+        painter.setFont(QFont("sans-serif", 8, QFont.Bold))
+        painter.setPen(stat_tcol)
+        painter.drawText(stat_rect, Qt.AlignCenter, stat_text)
+
+        # --- 5. Apparatus Equipment Labels ---
+        lbl_x = max(10.0, flask_cx - 90)
+        self._draw_equipment_label(painter, "250 mL Reaction Flask", QPointF(flask_cx - base_w / 2 + 8, flask_bottom_y - flask_h * 0.4), QPointF(lbl_x, flask_bottom_y - flask_h * 0.4), "right")
+        self._draw_equipment_label(painter, "Rubber Bung", QPointF(flask_cx - neck_w / 2, bung_top_y + 4), QPointF(lbl_x, bung_top_y + 4), "right")
+        self._draw_equipment_label(painter, "Glass Delivery Tube", QPointF(flask_cx + (syr_cx_start - flask_cx) / 2, tub_rise_y - 6), QPointF(flask_cx + (syr_cx_start - flask_cx) / 2, tub_rise_y - 24), "center")
+        self._draw_equipment_label(painter, "100 cm³ Gas Syringe", QPointF(syr_cx_start + 25, barrel_rect.top()), QPointF(syr_cx_start + 25, barrel_rect.top() - 18), "center")
+        self._draw_equipment_label(painter, "Sliding Glass Plunger", QPointF(disk_x, syr_y), QPointF(disk_x + 12, syr_y - 20), "left")
+        self._draw_equipment_label(painter, "Retort Stand & Clamp", QPointF(stand_x, bench_y - 25), QPointF(stand_x - 30, bench_y - 25), "right")
+        self._draw_equipment_label(painter, "Digital Reaction Monitor", QPointF(hud_x, hud_y + 20), QPointF(hud_x - 12, hud_y + 20), "right")
+
+        self._caption(painter, "REACTION KINETICS & GAS SYRINGE COLLECTION", 18, 50, CYAN)
+        react_info = f"Mg(s) + 2HCl(aq) → MgCl₂(aq) + H₂(g)↑  ·  CATALYST {'ACTIVE' if catalyst else 'OFF'}"
+        self._caption(painter, react_info, 18, 68, AMBER if catalyst else MINT)
 
     def _draw_titration(self, painter: QPainter, bounds):
         volume = float(self.parameters.get("volume", 0))
@@ -1040,7 +1562,17 @@ class LabCanvas(QWidget):
         painter.setPen(QColor("#a4d1c3"))
         painter.drawText(bur_info_rect, Qt.AlignCenter, f"TITRE: {volume:.2f} mL  (Equiv: {equiv_vol:.1f} mL)")
 
-        # --- 8. Top Apparatus Header & Indicator Callout ---
+        # --- 8. Apparatus Equipment Labels ---
+        lbl_x = max(10.0, cx - 85)
+        self._draw_equipment_label(painter, "50.00 mL Burette", QPointF(bur_left, bur_top_y + 40), QPointF(lbl_x, bur_top_y + 40), "right")
+        self._draw_equipment_label(painter, "Retort Stand & Clamp", QPointF(rod_x, clamp_y1), QPointF(lbl_x, clamp_y1), "right")
+        self._draw_equipment_label(painter, "Stopcock Valve", QPointF(cx - 8, stopcock_y + 4), QPointF(lbl_x, stopcock_y + 4), "right")
+        self._draw_equipment_label(painter, "250 mL Conical Flask", QPointF(cx - base_w * 0.42, flask_top_y + flask_h * 0.65), QPointF(lbl_x, flask_top_y + flask_h * 0.65), "right")
+        self._draw_equipment_label(painter, "Porcelain Contrast Tile", QPointF(cx - tile_w * 0.42, tile_y + 3), QPointF(lbl_x, tile_y + 3), "right")
+        self._draw_equipment_label(painter, "pH Electrode Probe", QPointF(probe_tip.x(), probe_tip.y()), QPointF(cx + 42, probe_tip.y() - 10), "left")
+        self._draw_equipment_label(painter, "Digital pH Analyser", QPointF(meter_x, meter_y + 20), QPointF(meter_x - 12, meter_y + 20), "right")
+
+        # --- 9. Top Apparatus Header & Indicator Callout ---
         self._caption(painter, "CLASS A PRECISION TITRATION APPARATUS", 18, 50, CYAN)
         ind_label = f"{indicator.upper()} ({drops} DROPS)" if drops > 0 else f"{indicator.upper()} (NO INDICATOR ADDED)"
         self._caption(painter, f"{flavor.label}  ·  {ind_label}", 18, 68, AMBER if drops > 0 else PINK)
@@ -1136,31 +1668,528 @@ class LabCanvas(QWidget):
         self._caption(painter, "CLOSED LOOP" if complete else "ADD PARTS, THEN CLOSE THE SWITCH", 30, bounds.height() - 22, AMBER)
 
     def _draw_salt_solubility(self, painter: QPainter, bounds):
-        water = self.parameters.get("water", 100)
-        salt = self.parameters.get("salt", 20)
-        temperature = self.parameters.get("temperature", 20)
-        dissolved = min(salt, water * (0.32 + temperature * 0.0007))
-        beaker = QRectF(bounds.width() * 0.34, bounds.height() * 0.25, bounds.width() * 0.32, bounds.height() * 0.60)
-        fill = QRectF(beaker.left() + 5, beaker.bottom() - beaker.height() * 0.62, beaker.width() - 10, beaker.height() * 0.62 - 5)
+        water = float(self.parameters.get("water", 100))
+        salt = float(self.parameters.get("salt", 25))
+        temperature = float(self.parameters.get("temperature", 25))
+        burner_lit = bool(getattr(self, "solubility_burner_lit", True))
+        stir_intensity = float(getattr(self, "solubility_stir_intensity", 0.0))
+        solubility_limit = water * (0.35 + 0.003 * max(0.0, temperature - 20.0))
+        dissolved = float(getattr(self, "solubility_dissolved_g", min(salt, solubility_limit)))
+        solid_left = max(0.0, salt - dissolved)
+
+        W = bounds.width()
+        H = bounds.height()
+        bench_y = H - 38
+
+        # --- 1. Lab Bench Surface ---
+        bench_grad = QLinearGradient(0, bench_y, 0, H)
+        bench_grad.setColorAt(0, QColor("#132924"))
+        bench_grad.setColorAt(0.2, QColor("#0d1d19"))
+        bench_grad.setColorAt(1, QColor("#060e0c"))
+        painter.fillRect(QRectF(0, bench_y, W, H - bench_y), bench_grad)
+        painter.setPen(QPen(QColor("#275347"), 2))
+        painter.drawLine(QPointF(0, bench_y), QPointF(W, bench_y))
+        painter.setPen(QPen(QColor(104, 239, 178, 40), 1))
+        painter.drawLine(QPointF(0, bench_y + 2), QPointF(W, bench_y + 2))
+
+        # --- 2. Iron Tripod Stand & Wire Gauze ---
+        cx = max(130.0, W * 0.30)
+        gauze_y = bench_y - 105
+        gauze_w = 110
+
+        # Tripod legs (cast iron splayed tubular legs with rubber feet)
+        painter.setPen(QPen(QColor("#3d564e"), 3))
+        painter.drawLine(QPointF(cx - gauze_w * 0.42, gauze_y), QPointF(cx - gauze_w * 0.58, bench_y))
+        painter.drawLine(QPointF(cx, gauze_y), QPointF(cx + 8, bench_y - 12))
+        painter.drawLine(QPointF(cx + gauze_w * 0.42, gauze_y), QPointF(cx + gauze_w * 0.58, bench_y))
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#348f91"))
-        painter.drawRoundedRect(fill, 8, 8)
-        painter.setBrush(QColor(117, 222, 209, 140))
-        painter.drawEllipse(QRectF(fill.left(), fill.top() - 5, fill.width(), 14))
-        painter.setBrush(Qt.NoBrush)
-        painter.setPen(QPen(QColor("#b7dfd1"), 3))
-        painter.drawRoundedRect(beaker, 10, 10)
-        for index in range(min(25, int(dissolved))):
-            x = beaker.left() + 18 + (index * 31 % max(int(beaker.width() - 36), 1))
-            y = fill.top() + 15 + (index * 19 % max(int(fill.height() - 25), 1))
+        painter.setBrush(QColor("#0d1714"))
+        painter.drawRect(QRectF(cx - gauze_w * 0.58 - 4, bench_y - 3, 8, 3))
+        painter.drawRect(QRectF(cx + gauze_w * 0.58 - 4, bench_y - 3, 8, 3))
+
+        # Circular Iron Tripod Ring Top
+        ring_rect = QRectF(cx - gauze_w / 2, gauze_y - 3, gauze_w, 6)
+        painter.setBrush(QColor("#273d36"))
+        painter.setPen(QPen(QColor("#48665b"), 1))
+        painter.drawRoundedRect(ring_rect, 2, 2)
+
+        # Ceramic Wire Gauze (metallic mesh with central white ceramic refractory patch)
+        gauze_rect = QRectF(cx - gauze_w / 2 + 3, gauze_y - 5, gauze_w - 6, 4)
+        painter.setBrush(QColor("#7b8f88"))
+        painter.setPen(QPen(QColor("#3d524b"), 0.8))
+        painter.drawRect(gauze_rect)
+        ceramic_rect = QRectF(cx - 30, gauze_y - 6, 60, 5)
+        ceramic_grad = QLinearGradient(ceramic_rect.left(), 0, ceramic_rect.right(), 0)
+        ceramic_grad.setColorAt(0, QColor("#e8ede8"))
+        ceramic_grad.setColorAt(0.5, QColor("#ffffff"))
+        ceramic_grad.setColorAt(1, QColor("#e8ede8"))
+        painter.setBrush(ceramic_grad)
+        painter.setPen(QPen(QColor("#b5c2ba"), 0.8))
+        painter.drawRoundedRect(ceramic_rect, 2, 2)
+
+        # --- 3. Bunsen Burner & Blue Flame ---
+        burner_w = 12
+        burner_h = 48
+        burner_top_y = gauze_y + 44
+        burner_bot_y = bench_y - 8
+        burner_rect = QRectF(cx - burner_w / 2, burner_top_y, burner_w, burner_bot_y - burner_top_y)
+
+        painter.setBrush(QColor("#1f332c"))
+        painter.setPen(QPen(QColor("#3d564e"), 1))
+        painter.drawRoundedRect(QRectF(cx - 24, bench_y - 10, 48, 10), 2, 2)
+        bar_grad = QLinearGradient(burner_rect.left(), 0, burner_rect.right(), 0)
+        bar_grad.setColorAt(0, QColor("#49665d"))
+        bar_grad.setColorAt(0.3, QColor("#d3e6df"))
+        bar_grad.setColorAt(0.7, QColor("#8faea4"))
+        bar_grad.setColorAt(1, QColor("#364b44"))
+        painter.setBrush(bar_grad)
+        painter.setPen(Qt.NoPen)
+        painter.drawRect(burner_rect)
+        painter.setBrush(QColor("#c59b43"))
+        painter.setPen(QPen(QColor("#7f6327"), 0.8))
+        painter.drawRoundedRect(QRectF(cx - burner_w / 2 - 2, burner_bot_y - 14, burner_w + 4, 8), 1, 1)
+
+        if burner_lit and temperature > 15:
+            flame_h = min(42.0, max(24.0, (burner_top_y - gauze_y) * 0.95))
+            flame_tip_y = burner_top_y - flame_h + math.sin(self.elapsed * 12.0) * 2.5
+            flame_w = 16
+
+            outer_flame = QPainterPath()
+            outer_flame.moveTo(cx - flame_w / 2, burner_top_y)
+            outer_flame.quadTo(cx - flame_w * 0.7, burner_top_y - flame_h * 0.5, cx, flame_tip_y)
+            outer_flame.quadTo(cx + flame_w * 0.7, burner_top_y - flame_h * 0.5, cx + flame_w / 2, burner_top_y)
+            outer_flame.closeSubpath()
+            out_grad = QRadialGradient(cx, burner_top_y - flame_h * 0.3, flame_h * 0.8)
+            out_grad.setColorAt(0, QColor(64, 180, 255, 140))
+            out_grad.setColorAt(0.7, QColor(36, 110, 215, 90))
+            out_grad.setColorAt(1, QColor(20, 60, 180, 0))
+            painter.setBrush(out_grad)
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor("#fff0bb"))
-            painter.drawEllipse(QPointF(x, y), 3, 3)
-        for index in range(min(20, int(max(0, salt - dissolved) * 1.5))):
-            x = beaker.left() + 18 + (index * 29 % max(int(beaker.width() - 36), 1))
-            painter.setBrush(QColor("#fff0bb"))
-            painter.drawRect(QRectF(x, beaker.bottom() - 14 - index % 3 * 4, 4, 4))
-        self._caption(painter, f"{temperature} °C  ·  {dissolved:.1f} g DISSOLVED", 26, bounds.height() - 20, AMBER)
+            painter.drawPath(outer_flame)
+
+            inner_flame = QPainterPath()
+            inner_flame.moveTo(cx - 5, burner_top_y)
+            inner_flame.quadTo(cx - 5, burner_top_y - flame_h * 0.4, cx, burner_top_y - flame_h * 0.65)
+            inner_flame.quadTo(cx + 5, burner_top_y - flame_h * 0.4, cx + 5, burner_top_y)
+            inner_flame.closeSubpath()
+            in_grad = QRadialGradient(cx, burner_top_y - flame_h * 0.3, flame_h * 0.5)
+            in_grad.setColorAt(0, QColor(87, 250, 240, 230))
+            in_grad.setColorAt(0.6, QColor(48, 195, 235, 180))
+            in_grad.setColorAt(1, QColor(30, 130, 220, 40))
+            painter.setBrush(in_grad)
+            painter.drawPath(inner_flame)
+
+        # --- 4. Borosilicate Glass Beaker (250 mL Pyrex) ---
+        beaker_w = 90
+        beaker_h = 100
+        beaker_bottom_y = gauze_y - 6
+        beaker_top_y = beaker_bottom_y - beaker_h
+        beaker_left = cx - beaker_w / 2
+        beaker_right = cx + beaker_w / 2
+        beaker_rect = QRectF(beaker_left, beaker_top_y, beaker_w, beaker_h)
+
+        liquid_h = min(beaker_h * 0.78, (water / 200.0) * beaker_h * 0.75 + 14)
+        liq_top_y = beaker_bottom_y - liquid_h
+        liq_rect = QRectF(beaker_left + 3, liq_top_y, beaker_w - 6, liquid_h)
+
+        sol_grad = QLinearGradient(beaker_left, liq_top_y, beaker_right, beaker_bottom_y)
+        sol_grad.setColorAt(0, QColor(35, 145, 155, 160))
+        sol_grad.setColorAt(0.5, QColor(25, 120, 135, 190))
+        sol_grad.setColorAt(1, QColor(15, 85, 105, 220))
+        painter.setBrush(sol_grad)
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(liq_rect, 4, 4)
+
+        meniscus = QPainterPath()
+        meniscus.moveTo(beaker_left + 3, liq_top_y)
+        meniscus.quadTo(cx, liq_top_y + (3.5 if stir_intensity > 0.1 else 1.8), beaker_right - 3, liq_top_y)
+        painter.setPen(QPen(QColor(160, 245, 240, 210), 1.5))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(meniscus)
+
+        if temperature > 30 and (self.running or burner_lit):
+            conv_pen = QPen(QColor(140, 240, 230, 50), 1)
+            painter.setPen(conv_pen)
+            for ci in range(4):
+                c_x = cx - 20 + ci * 13
+                offset = math.sin(self.elapsed * 2.5 + ci) * 4
+                painter.drawLine(QPointF(c_x, beaker_bottom_y - 8), QPointF(c_x + offset, liq_top_y + 8))
+
+        for index in range(min(22, int(dissolved))):
+            x = beaker_left + 14 + (index * 29 % max(1, int(beaker_w - 28)))
+            y = liq_top_y + 12 + ((index * 19 + int(self.elapsed * 8)) % max(1, int(liquid_h - 22)))
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor("#fff2b8"))
+            painter.drawEllipse(QPointF(x, y), 2.5, 2.5)
+
+        crystal_count = min(32, int(solid_left * 1.8))
+        if crystal_count > 0:
+            for ci in range(crystal_count):
+                cx_cr = beaker_left + 12 + (ci * 17) % max(1, int(beaker_w - 24))
+                cy_cr = beaker_bottom_y - 4 - (ci % 3) * 3.5
+                painter.setPen(QPen(QColor("#e8c874"), 0.8))
+                painter.setBrush(QColor("#fff0ba"))
+                painter.drawRect(QRectF(cx_cr, cy_cr, 4, 3))
+
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor("#7abfb0"), 2))
+        painter.drawRoundedRect(beaker_rect, 6, 6)
+        painter.drawLine(QPointF(beaker_left - 3, beaker_top_y - 2), QPointF(beaker_left + 4, beaker_top_y + 4))
+
+        tick_f = QFont()
+        tick_f.setPixelSize(7)
+        painter.setFont(tick_f)
+        for ml, frac in ((50, 0.25), (100, 0.50), (150, 0.75)):
+            my = beaker_bottom_y - frac * beaker_h * 0.82
+            painter.setPen(QPen(QColor(160, 220, 205, 180), 1))
+            painter.drawLine(QPointF(beaker_right - 12, my), QPointF(beaker_right - 3, my))
+            painter.setPen(QColor("#a4dcd0"))
+            painter.drawText(int(beaker_right - 32), int(my + 2.5), f"{ml}ml")
+
+        # --- 5. Laboratory Thermometer ---
+        thermo_cx = cx - 22
+        thermo_top_y = 28
+        thermo_bot_y = beaker_bottom_y - 12
+        thermo_w = 6
+        thermo_rect = QRectF(thermo_cx - thermo_w / 2, thermo_top_y, thermo_w, thermo_bot_y - thermo_top_y)
+
+        painter.setBrush(QColor(30, 80, 70, 90))
+        painter.setPen(QPen(QColor("#6dbda9"), 1))
+        painter.drawRoundedRect(thermo_rect, 2, 2)
+
+        temp_frac = min(1.0, max(0.0, (temperature - 10.0) / 80.0))
+        col_top_y = thermo_bot_y - 8 - temp_frac * (thermo_bot_y - thermo_top_y - 22)
+        col_rect = QRectF(thermo_cx - 1.2, col_top_y, 2.4, thermo_bot_y - col_top_y)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#ff4757"))
+        painter.drawRect(col_rect)
+        painter.setBrush(QColor("#ff3838"))
+        painter.drawEllipse(QPointF(thermo_cx, thermo_bot_y - 3), 4.5, 4.5)
+
+        # --- 6. Glass Stirring Rod ---
+        rod_top = QPointF(beaker_right + 14, beaker_top_y - 20)
+        rod_bot = QPointF(cx + 8, beaker_bottom_y - 4)
+        painter.setPen(QPen(QColor(140, 230, 215, 180), 3))
+        painter.drawLine(rod_top, rod_bot)
+        painter.setPen(QPen(QColor(240, 255, 250, 220), 1))
+        painter.drawLine(rod_top, rod_bot)
+
+        # --- 7. Digital Solubility HUD (Top Right) ---
+        hud_w = min(210.0, max(170.0, W - cx - 55))
+        hud_h = 138
+        hud_x = max(cx + 55, W - hud_w - 18)
+        hud_y = 22
+        hud_rect = QRectF(hud_x, hud_y, hud_w, hud_h)
+
+        h_grad = QLinearGradient(hud_x, hud_y, hud_x, hud_y + hud_h)
+        h_grad.setColorAt(0, QColor("#102521"))
+        h_grad.setColorAt(0.5, QColor("#0a1815"))
+        h_grad.setColorAt(1, QColor("#06100e"))
+        painter.setBrush(h_grad)
+        painter.setPen(QPen(QColor("#244a3f"), 1.5))
+        painter.drawRoundedRect(hud_rect, 10, 10)
+
+        painter.setFont(QFont("monospace", 8, QFont.Bold))
+        painter.setPen(QColor("#68efb2"))
+        painter.drawText(int(hud_x + 12), int(hud_y + 18), "SOLUBILITY ANALYSER")
+
+        lcd_rect = QRectF(hud_x + 10, hud_y + 26, hud_w - 20, 36)
+        painter.setBrush(QColor("#030c0a"))
+        painter.setPen(QPen(QColor("#16382f"), 1.2))
+        painter.drawRoundedRect(lcd_rect, 5, 5)
+
+        painter.setFont(QFont("monospace", 17, QFont.Bold))
+        painter.setPen(QColor("#ff5e62" if temperature >= 50 else "#57fabc"))
+        painter.drawText(lcd_rect.adjusted(8, 0, -8, 0), Qt.AlignVCenter | Qt.AlignLeft, f"{temperature:04.1f}")
+        painter.setFont(QFont("sans-serif", 8, QFont.Bold))
+        painter.setPen(QColor("#ff8c8e" if temperature >= 50 else "#7feec3"))
+        painter.drawText(lcd_rect.adjusted(0, 0, -8, -4), Qt.AlignVCenter | Qt.AlignRight, "°C THERMO")
+
+        painter.setFont(QFont("sans-serif", 8))
+        painter.setPen(QColor("#a4d1c3"))
+        painter.drawText(int(hud_x + 12), int(hud_y + 78), f"DISSOLVED: {dissolved:.1f} g  / {water:.0f} mL H₂O")
+        painter.drawText(int(hud_x + 12), int(hud_y + 92), f"SOLUBILITY LIMIT: {solubility_limit:.1f} g")
+
+        stat_rect = QRectF(hud_x + 10, hud_y + 104, hud_w - 20, 22)
+        if solid_left > 0.2:
+            stat_col, stat_text = QColor(255, 193, 7, 40), f"★ CRYSTALLISED ({solid_left:.1f} g)"
+            stat_tcol = QColor("#ffc107")
+        elif dissolved >= solubility_limit * 0.95:
+            stat_col, stat_text = QColor(104, 239, 178, 40), "● SATURATED SOLUTION"
+            stat_tcol = QColor("#57fabc")
+        else:
+            stat_col, stat_text = QColor(88, 216, 208, 30), "● UNSATURATED"
+            stat_tcol = QColor("#58d8d0")
+        painter.setBrush(stat_col)
+        painter.setPen(QPen(stat_tcol, 1))
+        painter.drawRoundedRect(stat_rect, 4, 4)
+        painter.setFont(QFont("sans-serif", 8, QFont.Bold))
+        painter.setPen(stat_tcol)
+        painter.drawText(stat_rect, Qt.AlignCenter, stat_text)
+
+        # --- 8. Apparatus Equipment Labels ---
+        lbl_x = max(10.0, cx - 85)
+        self._draw_equipment_label(painter, "250 mL Pyrex Beaker", QPointF(beaker_left, beaker_bottom_y - beaker_h * 0.5), QPointF(lbl_x, beaker_bottom_y - beaker_h * 0.5), "right")
+        self._draw_equipment_label(painter, "Ceramic Wire Gauze", QPointF(cx - gauze_w * 0.45, gauze_y - 2), QPointF(lbl_x, gauze_y - 2), "right")
+        self._draw_equipment_label(painter, "Iron Tripod Stand", QPointF(cx - gauze_w * 0.52, bench_y - 45), QPointF(lbl_x, bench_y - 45), "right")
+        self._draw_equipment_label(painter, "Bunsen Burner (Blue Flame)", QPointF(cx + burner_w / 2, burner_top_y + 12), QPointF(cx + 42, burner_top_y + 12), "left")
+        self._draw_equipment_label(painter, "Laboratory Thermometer", QPointF(thermo_cx, thermo_top_y + 55), QPointF(lbl_x, thermo_top_y + 55), "right")
+        self._draw_equipment_label(painter, "Glass Stirring Rod", QPointF(rod_top.x(), rod_top.y()), QPointF(rod_top.x() + 10, rod_top.y() - 10), "left")
+        self._draw_equipment_label(painter, "Solubility Analyser", QPointF(hud_x, hud_y + 20), QPointF(hud_x - 12, hud_y + 20), "right")
+
+        self._caption(painter, "THERMAL SOLUBILITY & CRYSTALLISATION APPARATUS", 18, 50, CYAN)
+        burn_txt = "BUNSEN HEATING ACTIVE" if (burner_lit and temperature > 15) else "HEAT OFF (COOLING)"
+        self._caption(painter, f"Solubility S(T) = {solubility_limit:.1f} g/100 mL  ·  {burn_txt}", 18, 68, AMBER if burner_lit else CYAN)
+
+    def _draw_precipitation_salts(self, painter: QPainter, bounds):
+        vol_a = float(self.parameters.get("reagent_a", 25))
+        vol_b = float(self.parameters.get("reagent_b", 25))
+        washes = int(getattr(self, "precip_wash_count", int(self.parameters.get("wash_count", 2))))
+        filtrate_ml = float(getattr(self, "precip_filtrate_ml", 0.0))
+        drip_phase = float(getattr(self, "precip_drip_phase", 0.0))
+        moles = min(vol_a, vol_b) * 0.1 / 1000.0
+        mass_precip = moles * 233.38
+
+        W = bounds.width()
+        H = bounds.height()
+        bench_y = H - 38
+
+        # --- 1. Lab Bench Surface ---
+        bench_grad = QLinearGradient(0, bench_y, 0, H)
+        bench_grad.setColorAt(0, QColor("#132924"))
+        bench_grad.setColorAt(0.2, QColor("#0d1d19"))
+        bench_grad.setColorAt(1, QColor("#060e0c"))
+        painter.fillRect(QRectF(0, bench_y, W, H - bench_y), bench_grad)
+        painter.setPen(QPen(QColor("#275347"), 2))
+        painter.drawLine(QPointF(0, bench_y), QPointF(W, bench_y))
+        painter.setPen(QPen(QColor(104, 239, 178, 40), 1))
+        painter.drawLine(QPointF(0, bench_y + 2), QPointF(W, bench_y + 2))
+
+        # --- 2. Retort Stand & Ring Clamp ---
+        cx = max(130.0, W * 0.32)
+        stand_left = cx - 80
+        stand_w = 120
+        stand_rect = QRectF(stand_left, bench_y - 12, stand_w, 12)
+        painter.setBrush(QColor("#1f332c"))
+        painter.setPen(QPen(QColor("#3d564e"), 1))
+        painter.drawRoundedRect(stand_rect, 2, 2)
+
+        rod_x = stand_left + 16
+        rod_rect = QRectF(rod_x - 3.5, 24, 7, bench_y - 12 - 24)
+        rod_grad = QLinearGradient(rod_rect.left(), 0, rod_rect.right(), 0)
+        rod_grad.setColorAt(0.0, QColor("#49665d"))
+        rod_grad.setColorAt(0.3, QColor("#d3e6df"))
+        rod_grad.setColorAt(0.7, QColor("#8faea4"))
+        rod_grad.setColorAt(1.0, QColor("#364b44"))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(rod_grad)
+        painter.drawRoundedRect(rod_rect, 2, 2)
+
+        clamp_y = 110
+        painter.setBrush(QColor("#274037"))
+        painter.setPen(QPen(QColor("#44695c"), 1))
+        painter.drawRoundedRect(QRectF(rod_x - 5, clamp_y - 6, 10, 12), 2, 2)
+        painter.setPen(QPen(QColor("#a88636"), 2.5))
+        painter.drawLine(QPointF(rod_x + 5, clamp_y), QPointF(cx - 36, clamp_y))
+        painter.drawRoundedRect(QRectF(cx - 36, clamp_y - 3, 72, 6), 2, 2)
+
+        # --- 3. Receiving Erlenmeyer Flask (250 mL) on Bench ---
+        flask_bottom_y = bench_y
+        flask_h = min(115.0, max(85.0, (bench_y - clamp_y) * 0.58))
+        flask_top_y = flask_bottom_y - flask_h
+        neck_h = flask_h * 0.24
+        neck_w = 26
+        base_w = 90
+
+        flask_path = QPainterPath()
+        flask_path.moveTo(cx - neck_w / 2, flask_top_y)
+        flask_path.lineTo(cx + neck_w / 2, flask_top_y)
+        flask_path.lineTo(cx + neck_w / 2, flask_top_y + neck_h)
+        flask_path.lineTo(cx + base_w / 2, flask_bottom_y - 6)
+        flask_path.quadTo(cx + base_w / 2, flask_bottom_y, cx + base_w / 2 - 8, flask_bottom_y)
+        flask_path.lineTo(cx - base_w / 2 + 8, flask_bottom_y)
+        flask_path.quadTo(cx - base_w / 2, flask_bottom_y, cx - base_w / 2, flask_bottom_y - 6)
+        flask_path.lineTo(cx - neck_w / 2, flask_top_y + neck_h)
+        flask_path.closeSubpath()
+
+        liquid_h = min(flask_h * 0.55, (filtrate_ml / 50.0) * flask_h * 0.50 + 8)
+        surface_y = flask_bottom_y - liquid_h
+        t_w = (surface_y - (flask_top_y + neck_h)) / max(1.0, (flask_bottom_y - 6) - (flask_top_y + neck_h))
+        surface_w = neck_w + t_w * (base_w - neck_w)
+
+        liquid_path = QPainterPath()
+        liquid_path.moveTo(cx - surface_w / 2, surface_y)
+        liquid_path.lineTo(cx + surface_w / 2, surface_y)
+        liquid_path.lineTo(cx + base_w / 2, flask_bottom_y - 6)
+        liquid_path.quadTo(cx + base_w / 2, flask_bottom_y, cx + base_w / 2 - 8, flask_bottom_y)
+        liquid_path.lineTo(cx - base_w / 2 + 8, flask_bottom_y)
+        liquid_path.quadTo(cx - base_w / 2, flask_bottom_y, cx - base_w / 2, flask_bottom_y - 6)
+        liquid_path.closeSubpath()
+
+        liq_grad = QLinearGradient(cx - surface_w / 2, surface_y, cx + surface_w / 2, flask_bottom_y)
+        liq_grad.setColorAt(0, QColor(60, 195, 175, 120))
+        liq_grad.setColorAt(0.5, QColor(45, 160, 145, 150))
+        liq_grad.setColorAt(1, QColor(30, 120, 110, 180))
+        painter.setBrush(liq_grad)
+        painter.setPen(Qt.NoPen)
+        painter.drawPath(liquid_path)
+
+        painter.setPen(QPen(QColor(180, 255, 240, 200), 1.5))
+        painter.drawLine(QPointF(cx - surface_w / 2 + 2, surface_y), QPointF(cx + surface_w / 2 - 2, surface_y))
+
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor("#64b4a0"), 2))
+        painter.drawPath(flask_path)
+        painter.setPen(QPen(QColor(230, 255, 250, 150), 1.2))
+        painter.drawLine(QPointF(cx - base_w / 2 + 8, flask_bottom_y - 6), QPointF(cx - neck_w / 2 + 3, flask_top_y + neck_h + 6))
+
+        # --- 4. Borosilicate Glass Filter Funnel (60°) & Stem ---
+        funnel_top_y = clamp_y - 48
+        funnel_h = 50
+        funnel_w = 72
+        stem_w = 8
+        stem_h = 58
+        stem_tip_y = funnel_top_y + funnel_h + stem_h
+
+        funnel_path = QPainterPath()
+        funnel_path.moveTo(cx - funnel_w / 2, funnel_top_y)
+        funnel_path.lineTo(cx + funnel_w / 2, funnel_top_y)
+        funnel_path.lineTo(cx + stem_w / 2, funnel_top_y + funnel_h)
+        funnel_path.lineTo(cx + stem_w / 2, stem_tip_y - 6)
+        funnel_path.lineTo(cx + stem_w / 2 - 4, stem_tip_y)
+        funnel_path.lineTo(cx - stem_w / 2, stem_tip_y - 5)
+        funnel_path.lineTo(cx - stem_w / 2, funnel_top_y + funnel_h)
+        funnel_path.closeSubpath()
+
+        paper_path = QPainterPath()
+        paper_top_y = funnel_top_y + 4
+        paper_w = funnel_w - 10
+        paper_path.moveTo(cx - paper_w / 2, paper_top_y)
+        paper_path.lineTo(cx + paper_w / 2, paper_top_y)
+        paper_path.lineTo(cx, funnel_top_y + funnel_h - 2)
+        paper_path.closeSubpath()
+
+        painter.setPen(QPen(QColor("#cfded8"), 1))
+        painter.setBrush(QColor("#f4faf7"))
+        painter.drawPath(paper_path)
+        painter.setPen(QPen(QColor("#bad2c8"), 0.8))
+        painter.drawLine(QPointF(cx - paper_w * 0.25, paper_top_y), QPointF(cx, funnel_top_y + funnel_h - 2))
+        painter.drawLine(QPointF(cx + paper_w * 0.25, paper_top_y), QPointF(cx, funnel_top_y + funnel_h - 2))
+
+        precip_path = QPainterPath()
+        precip_path.moveTo(cx - paper_w * 0.35, paper_top_y + 12)
+        precip_path.lineTo(cx + paper_w * 0.35, paper_top_y + 12)
+        precip_path.lineTo(cx, funnel_top_y + funnel_h - 3)
+        precip_path.closeSubpath()
+        painter.setPen(QPen(QColor("#ffffff"), 1))
+        painter.setBrush(QColor(255, 255, 255, 230))
+        painter.drawPath(precip_path)
+
+        f_grad = QLinearGradient(cx - funnel_w / 2, funnel_top_y, cx + funnel_w / 2, funnel_top_y)
+        f_grad.setColorAt(0, QColor(100, 180, 160, 90))
+        f_grad.setColorAt(0.5, QColor(160, 240, 220, 50))
+        f_grad.setColorAt(1, QColor(80, 160, 140, 90))
+        painter.setBrush(f_grad)
+        painter.setPen(QPen(QColor("#7abfb0"), 1.8))
+        painter.drawPath(funnel_path)
+
+        if self.running or drip_phase > 0.01:
+            drop_y = stem_tip_y + drip_phase * (surface_y - stem_tip_y)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor("#72f0db"))
+            painter.drawEllipse(QPointF(cx, drop_y), 2.2, 3.2)
+            if drip_phase > 0.85:
+                rip_r = (drip_phase - 0.85) * 20
+                painter.setPen(QPen(QColor(114, 240, 219, 140), 1))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawEllipse(QPointF(cx, surface_y), rip_r, rip_r * 0.35)
+
+        # --- 5. Wash Bottle (Distilled H2O) ---
+        wb_cx = cx + 85
+        wb_w = 40
+        wb_h = 75
+        wb_rect = QRectF(wb_cx - wb_w / 2, bench_y - wb_h, wb_w, wb_h)
+        wb_grad = QLinearGradient(wb_rect.left(), 0, wb_rect.right(), 0)
+        wb_grad.setColorAt(0, QColor(50, 130, 115, 140))
+        wb_grad.setColorAt(0.4, QColor(95, 215, 195, 110))
+        wb_grad.setColorAt(1, QColor(40, 110, 95, 140))
+        painter.setBrush(wb_grad)
+        painter.setPen(QPen(QColor("#64b4a0"), 1.5))
+        painter.drawRoundedRect(wb_rect, 6, 6)
+        cap_rect = QRectF(wb_cx - 8, bench_y - wb_h - 10, 16, 10)
+        painter.setBrush(QColor("#3d564e"))
+        painter.drawRoundedRect(cap_rect, 2, 2)
+        nozzle_path = QPainterPath()
+        nozzle_path.moveTo(wb_cx, bench_y - wb_h - 10)
+        nozzle_path.lineTo(wb_cx, bench_y - wb_h - 25)
+        nozzle_path.quadTo(wb_cx, bench_y - wb_h - 35, wb_cx - 15, bench_y - wb_h - 32)
+        nozzle_path.lineTo(cx + funnel_w * 0.25, funnel_top_y + 8)
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor(180, 245, 235, 200), 2))
+        painter.drawPath(nozzle_path)
+
+        # --- 6. Gravimetric HUD (Top Right) ---
+        hud_w = min(210.0, max(170.0, W - cx - 55))
+        hud_h = 138
+        hud_x = max(cx + 55, W - hud_w - 18)
+        hud_y = 22
+        hud_rect = QRectF(hud_x, hud_y, hud_w, hud_h)
+
+        h_grad = QLinearGradient(hud_x, hud_y, hud_x, hud_y + hud_h)
+        h_grad.setColorAt(0, QColor("#102521"))
+        h_grad.setColorAt(0.5, QColor("#0a1815"))
+        h_grad.setColorAt(1, QColor("#06100e"))
+        painter.setBrush(h_grad)
+        painter.setPen(QPen(QColor("#244a3f"), 1.5))
+        painter.drawRoundedRect(hud_rect, 10, 10)
+
+        painter.setFont(QFont("monospace", 8, QFont.Bold))
+        painter.setPen(QColor("#68efb2"))
+        painter.drawText(int(hud_x + 12), int(hud_y + 18), "GRAVIMETRIC YIELD HUD")
+
+        lcd_rect = QRectF(hud_x + 10, hud_y + 26, hud_w - 20, 36)
+        painter.setBrush(QColor("#030c0a"))
+        painter.setPen(QPen(QColor("#16382f"), 1.2))
+        painter.drawRoundedRect(lcd_rect, 5, 5)
+
+        painter.setFont(QFont("monospace", 17, QFont.Bold))
+        painter.setPen(QColor("#57fabc"))
+        painter.drawText(lcd_rect.adjusted(8, 0, -8, 0), Qt.AlignVCenter | Qt.AlignLeft, f"{mass_precip:04.2f}")
+        painter.setFont(QFont("sans-serif", 8, QFont.Bold))
+        painter.setPen(QColor("#7feec3"))
+        painter.drawText(lcd_rect.adjusted(0, 0, -8, -4), Qt.AlignVCenter | Qt.AlignRight, "g BaSO₄")
+
+        painter.setFont(QFont("sans-serif", 8))
+        painter.setPen(QColor("#a4d1c3"))
+        painter.drawText(int(hud_x + 12), int(hud_y + 78), f"FILTRATE: {filtrate_ml:.1f} mL  (NaCl aq)")
+        painter.drawText(int(hud_x + 12), int(hud_y + 92), f"WASH PURITY: {washes}/5 CYCLES")
+
+        stat_rect = QRectF(hud_x + 10, hud_y + 104, hud_w - 20, 22)
+        if washes >= 2:
+            stat_col, stat_text = QColor(104, 239, 178, 40), "★ ANALYTICAL GRADE PURE"
+            stat_tcol = QColor("#57fabc")
+        else:
+            stat_col, stat_text = QColor(255, 193, 7, 40), "● CRUDE RESIDUE (NEEDS WASH)"
+            stat_tcol = QColor("#ffc107")
+        painter.setBrush(stat_col)
+        painter.setPen(QPen(stat_tcol, 1))
+        painter.drawRoundedRect(stat_rect, 4, 4)
+        painter.setFont(QFont("sans-serif", 8, QFont.Bold))
+        painter.setPen(stat_tcol)
+        painter.drawText(stat_rect, Qt.AlignCenter, stat_text)
+
+        # --- 7. Apparatus Equipment Labels ---
+        lbl_x = max(10.0, cx - 85)
+        self._draw_equipment_label(painter, "Borosilicate Filter Funnel", QPointF(cx - funnel_w / 2, funnel_top_y + 16), QPointF(lbl_x, funnel_top_y + 16), "right")
+        self._draw_equipment_label(painter, "Fluted Filter Paper Cone", QPointF(cx - paper_w * 0.35, paper_top_y + 6), QPointF(lbl_x, paper_top_y + 6), "right")
+        self._draw_equipment_label(painter, "Retort Stand & Ring Clamp", QPointF(rod_x, clamp_y), QPointF(lbl_x, clamp_y), "right")
+        self._draw_equipment_label(painter, "Insoluble Salt Residue", QPointF(cx, funnel_top_y + funnel_h - 6), QPointF(cx + 42, funnel_top_y + funnel_h - 16), "left")
+        self._draw_equipment_label(painter, "Receiving Erlenmeyer Flask", QPointF(cx - base_w * 0.42, flask_bottom_y - flask_h * 0.4), QPointF(lbl_x, flask_bottom_y - flask_h * 0.4), "right")
+        self._draw_equipment_label(painter, "Wash Bottle (Distilled H₂O)", QPointF(wb_cx, bench_y - wb_h * 0.5), QPointF(wb_cx + 28, bench_y - wb_h * 0.5), "left")
+        self._draw_equipment_label(painter, "Gravimetric Yield HUD", QPointF(hud_x, hud_y + 20), QPointF(hud_x - 12, hud_y + 20), "right")
+
+        self._caption(painter, "PREPARATION OF SALTS · PRECIPITATION & GRAVITY FILTRATION", 18, 50, CYAN)
+        self._caption(painter, "BaCl₂(aq) + Na₂SO₄(aq) → BaSO₄(s)↓ + 2NaCl(aq)", 18, 68, MINT)
 
     def _draw_particle_states(self, painter: QPainter, bounds):
         temperature = self.parameters.get("temperature", 35)
