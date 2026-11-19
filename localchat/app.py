@@ -9,8 +9,23 @@ import unicodedata
 
 import requests
 
-from PySide6.QtCore import QEvent, QEasingCurve, QProcess, QProcessEnvironment, QPropertyAnimation, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPen, QPixmap, QShortcut
+from PySide6.QtCore import QEvent, QEasingCurve, QProcess, QProcessEnvironment, QPropertyAnimation, QRectF, QSize, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontMetrics,
+    QIcon,
+    QKeySequence,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QRadialGradient,
+    QShortcut,
+    QTextCursor,
+    QTextDocument,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -33,7 +48,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from PySide6.QtGui import QTextDocument
 
 from localchat.client import stream_chat
 from localchat.gce import (
@@ -63,86 +77,138 @@ from localchat.chemistry_practicals import (
     level_by_slug,
 )
 from localchat.math_analysis import AnalysisResult, analyse_function, analyse_xy_data
+from localchat.os_desktop import OSDesktopView
+from localchat.os_explorer import OSFolderExplorerView, EXPERIMENT_TOPIC_METADATA
+from localchat.os_header import OSHeader
+from localchat.os_sidebar import OSSidebar
+from localchat.os_shutdown import OSShutdownOverlay
+from localchat.offline_tutor import generate_offline_gce_response, detect_subject
+
+
+SUBJECT_TERMINAL_STYLES = {
+    "Chemistry": {
+        "badge": "[ 🧪 CHEMISTRY · REACTION & MOLECULAR SYNTHESIS ]",
+        "accent": "#57fabc",
+        "bg": "rgba(4, 28, 26, 0.88)",
+        "border": "rgba(87, 250, 188, 0.35)",
+        "tag": "GCE CAMEROON · EXPERIMENTAL CHEMISTRY",
+    },
+    "Physics": {
+        "badge": "[ 🎯 PHYSICS · LAWS & EXPERIMENTAL DYNAMICS ]",
+        "accent": "#389fff",
+        "bg": "rgba(4, 20, 38, 0.88)",
+        "border": "rgba(56, 159, 255, 0.35)",
+        "tag": "GCE CAMEROON · EXPERIMENTAL PHYSICS",
+    },
+    "Biology": {
+        "badge": "[ 🔬 BIOLOGY · PHYSIOLOGY & CELLULAR SYSTEMS ]",
+        "accent": "#ff9f43",
+        "bg": "rgba(32, 20, 4, 0.88)",
+        "border": "rgba(255, 159, 67, 0.35)",
+        "tag": "GCE CAMEROON · LIFE SCIENCES",
+    },
+    "Mathematics": {
+        "badge": "[ 📐 MATHEMATICS · STEP-BY-STEP CALCULATION ]",
+        "accent": "#20bf6b",
+        "bg": "rgba(6, 26, 20, 0.88)",
+        "border": "rgba(32, 191, 107, 0.35)",
+        "tag": "GCE CAMEROON · PURE & APPLIED MATHS",
+    },
+    "Computer Science": {
+        "badge": "[ 💻 COMPUTER SCIENCE · ALGORITHMS & SYSTEMS ]",
+        "accent": "#a55eea",
+        "bg": "rgba(24, 12, 38, 0.88)",
+        "border": "rgba(165, 94, 234, 0.35)",
+        "tag": "GCE CAMEROON · COMPUTING SCIENCES",
+    },
+    "Science": {
+        "badge": "[ ⚙️ GCE STEM · INTEGRATED SCIENCE LAB ]",
+        "accent": "#58d8d0",
+        "bg": "rgba(3, 15, 32, 0.88)",
+        "border": "rgba(88, 216, 208, 0.35)",
+        "tag": "GCE CAMEROON · GENERAL SYLLABUS",
+    },
+}
 
 
 def build_stylesheet() -> str:
     return """
     QWidget {
-        background: #031b18;
-        color: #dcfff6;
-        font-family: "JetBrains Mono", "Fira Code", "SFMono-Regular", monospace;
+        background: transparent;
+        color: #e8f7ef;
+        font-family: "JetBrains Mono", "Fira Code", "SFMono-Regular", sans-serif;
         border: none;
     }
 
     QMainWindow {
-        background: #031b18;
+        background: #020b18;
     }
 
     #root {
-        background: #021611;
-        border: 1px solid rgba(64, 208, 176, 0.35);
-        border-radius: 18px;
+        background: #020d1c;
+        border: 1.2px solid rgba(88, 216, 208, 0.32);
+        border-radius: 20px;
     }
 
     #sidebar {
-        background: rgba(4, 23, 20, 0.95);
-        border: 1px solid rgba(55, 191, 164, 0.35);
-        border-radius: 16px 0 0 16px;
+        background: rgba(6, 22, 42, 0.94);
+        border: 1px solid rgba(88, 216, 208, 0.32);
+        border-radius: 16px;
     }
 
     #chatPanel {
-        background: rgba(2, 20, 17, 0.98);
-        border: 1px solid rgba(55, 191, 164, 0.35);
-        border-radius: 0 16px 16px 0;
+        background: rgba(4, 18, 36, 0.96);
+        border: 1px solid rgba(88, 216, 208, 0.28);
+        border-radius: 16px;
     }
 
     #headerBar {
-        background: rgba(5, 24, 21, 0.92);
-        border: 1px solid rgba(64, 208, 176, 0.3);
-        border-radius: 12px;
-        padding: 12px 16px;
+        background: rgba(6, 22, 42, 0.88);
+        border: 1px solid rgba(88, 216, 208, 0.3);
+        border-radius: 14px;
+        padding: 10px 14px;
     }
 
     #brand {
-        color: #7ef3d0;
-        font-size: 28px;
+        color: #58d8d0;
+        font-size: 26px;
         font-weight: 800;
-        letter-spacing: 0.18em;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
     }
 
     #statPill {
-        color: #7ef3d0;
-        border: 1px solid rgba(126, 243, 208, 0.45);
-        background: rgba(12, 44, 39, 0.7);
+        color: #57fabc;
+        border: 1px solid rgba(87, 250, 188, 0.45);
+        background: rgba(8, 30, 52, 0.7);
         border-radius: 999px;
         padding: 7px 12px;
         font-size: 10px;
-        letter-spacing: 0.18em;
+        letter-spacing: 0.16em;
         text-transform: uppercase;
     }
 
     #modelInfo {
-        color: #bfeee3;
+        color: #a4dcd0;
         font-size: 11px;
         letter-spacing: 0.10em;
         text-transform: uppercase;
     }
 
     #searchBox {
-        background: rgba(7, 29, 25, 0.9);
-        border: 1px solid rgba(81, 204, 175, 0.38);
+        background: rgba(8, 30, 56, 0.9);
+        border: 1px solid rgba(88, 216, 208, 0.4);
         border-radius: 10px;
         padding: 9px 12px;
-        color: #d8fff4;
+        color: #e8f7ef;
         font-size: 12px;
     }
 
     #newChatButton {
-        background: rgba(12, 52, 45, 0.92);
-        border: 1px solid rgba(92, 240, 199, 0.6);
+        background: rgba(14, 46, 82, 0.92);
+        border: 1px solid rgba(88, 216, 208, 0.6);
         border-radius: 10px;
-        color: #aefee0;
+        color: #57fabc;
         font-size: 12px;
         font-weight: 700;
         letter-spacing: 0.08em;
@@ -151,7 +217,8 @@ def build_stylesheet() -> str:
     }
 
     #newChatButton:hover {
-        background: rgba(16, 68, 59, 0.95);
+        background: rgba(40, 160, 220, 0.95);
+        color: #ffffff;
     }
 
     #windowControlButton {
@@ -185,9 +252,9 @@ def build_stylesheet() -> str:
     }
 
     #studyCard {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(8, 34, 28, 0.95), stop:1 rgba(11, 44, 36, 0.98));
-        border: 1px solid rgba(75, 186, 153, 0.45);
-        border-radius: 12px;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(8, 28, 54, 0.92), stop:1 rgba(12, 40, 72, 0.95));
+        border: 1px solid rgba(88, 216, 208, 0.38);
+        border-radius: 14px;
         color: #e4fff2;
         padding: 20px 22px;
         min-height: 80px;
@@ -197,25 +264,25 @@ def build_stylesheet() -> str:
     }
 
     #studyCard:hover {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(16, 64, 52, 0.98), stop:1 rgba(12, 54, 44, 0.98));
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(16, 54, 96, 0.96), stop:1 rgba(14, 48, 88, 0.96));
         border-color: #57fabc;
         color: #ffffff;
     }
 
     #studyModeButton {
-        background: rgba(10, 39, 32, 0.9);
-        border: 1px solid rgba(75, 186, 153, 0.45);
+        background: rgba(10, 36, 68, 0.9);
+        border: 1px solid rgba(88, 216, 208, 0.4);
         border-radius: 8px;
-        color: #baf3d4;
+        color: #b4e5dc;
         padding: 8px 14px;
         font-size: 11px;
         font-weight: 700;
     }
 
     #studyModeButton:hover {
-        background: rgba(18, 76, 58, 0.98);
+        background: rgba(40, 160, 220, 0.95);
         border-color: #57fabc;
-        color: #effff7;
+        color: #ffffff;
     }
 
     #studyHeading {
@@ -237,127 +304,135 @@ def build_stylesheet() -> str:
     }
 
     #labNavButton {
-        background: rgba(8, 33, 28, 0.88);
-        border: 1px solid rgba(61, 133, 107, 0.3);
-        border-radius: 8px;
-        color: #a9cdbb;
+        background: rgba(8, 28, 54, 0.88);
+        border: 1px solid rgba(88, 216, 208, 0.35);
+        border-radius: 10px;
+        color: #89d4c4;
         text-align: left;
-        padding: 10px 12px;
+        padding: 10px 14px;
         font-size: 11px;
         font-weight: 700;
     }
 
     #labNavButton:hover, #labNavButton:checked {
-        background: rgba(15, 58, 44, 0.95);
-        border-color: #58c999;
-        color: #e7fff0;
+        background: rgba(14, 46, 82, 0.95);
+        border-color: #57fabc;
+        color: #ffffff;
     }
 
     #labSubjectButton {
         background: transparent;
         border: 1px solid transparent;
-        border-radius: 7px;
-        color: #8eaa9b;
+        border-radius: 8px;
+        color: #89b4c8;
         text-align: left;
         padding: 8px 12px;
         font-size: 11px;
     }
 
     #labSubjectButton:hover {
-        background: rgba(11, 42, 34, 0.86);
-        color: #d7f5e4;
+        background: rgba(14, 46, 82, 0.86);
+        color: #57fabc;
+    }
+
+    #labCanvas {
+        background: rgba(3, 15, 32, 0.92);
+        border: 1.5px solid rgba(88, 216, 208, 0.4);
+        border-radius: 16px;
     }
 
     #labMetric {
-        background: #0a1a15;
-        border: 1px solid #204837;
-        border-radius: 8px;
+        background: rgba(6, 24, 48, 0.9);
+        border: 1px solid rgba(88, 216, 208, 0.35);
+        border-radius: 10px;
         padding: 10px;
     }
 
     #labMetricName {
-        color: #6fa88d;
+        color: #89d4c4;
         font-size: 9px;
         font-weight: 700;
+        letter-spacing: 0.08em;
     }
 
     #labMetricValue {
-        color: #b7f4d0;
+        color: #57fabc;
         font-size: 17px;
         font-weight: 800;
     }
 
     #labControlLabel {
-        color: #d8eee2;
+        color: #eaf7f5;
         font-size: 11px;
         font-weight: 700;
     }
 
     #labControlValue {
-        color: #6fe4aa;
+        color: #57fabc;
         font-size: 11px;
         font-weight: 700;
     }
 
     QSlider::groove:horizontal {
-        height: 5px;
-        background: #18372a;
-        border-radius: 2px;
+        height: 6px;
+        background: rgba(14, 46, 82, 0.85);
+        border-radius: 3px;
     }
 
     QSlider::sub-page:horizontal {
-        background: #39a975;
-        border-radius: 2px;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1a7e78, stop:1 #57fabc);
+        border-radius: 3px;
     }
 
     QSlider::handle:horizontal {
-        width: 15px;
-        margin: -6px 0;
-        background: #b8f5d0;
-        border: 2px solid #287b52;
-        border-radius: 7px;
+        width: 16px;
+        margin: -5px 0;
+        background: #57fabc;
+        border: 2px solid #062238;
+        border-radius: 8px;
     }
 
     #labSafety {
-        color: #ffce90;
-        background: #211b11;
-        border: 1px solid #65502d;
-        border-radius: 8px;
-        padding: 10px 12px;
+        color: #ffd180;
+        background: rgba(42, 28, 12, 0.88);
+        border: 1px solid rgba(255, 179, 64, 0.45);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 11px;
     }
 
     #chemistryLevelButton, #chemistryTopicButton {
         background: transparent;
         border: 1px solid transparent;
         border-radius: 6px;
-        color: #a5cabc;
+        color: #89b4c8;
         text-align: left;
         padding: 7px 8px;
         font-size: 10px;
     }
 
     #chemistryLevelButton:hover, #chemistryTopicButton:hover {
-        background: rgba(36, 91, 73, 0.55);
-        color: #effff7;
+        background: rgba(14, 46, 82, 0.65);
+        color: #ffffff;
     }
 
     #chemistryLevelButton[active="true"], #chemistryTopicButton[active="true"] {
-        background: rgba(25, 99, 72, 0.64);
-        border-color: rgba(117, 239, 177, 0.45);
-        color: #a8f4c9;
+        background: rgba(18, 58, 104, 0.75);
+        border-color: rgba(88, 216, 208, 0.5);
+        color: #57fabc;
         font-weight: 700;
     }
 
     #chemistryTopicHeading {
-        color: #e8fff2;
+        color: #f0f7ff;
         font-size: 22px;
         font-weight: 800;
     }
 
     #practicalExperimentCard {
-        background: #0c211b;
-        border: 1px solid #285244;
-        border-radius: 8px;
+        background: rgba(8, 26, 50, 0.88);
+        border: 1.5px solid rgba(88, 216, 208, 0.25);
+        border-radius: 12px;
         color: #dff8eb;
         padding: 16px;
         text-align: left;
@@ -366,55 +441,55 @@ def build_stylesheet() -> str:
     }
 
     #practicalExperimentCard:hover {
-        background: #123026;
-        border-color: #69d7a4;
+        background: rgba(14, 44, 82, 0.95);
+        border-color: #57fabc;
     }
 
     #practicalExperimentCard:pressed {
-        background: #174131;
+        background: rgba(20, 60, 110, 0.95);
     }
 
     #practicalCardImage {
-        background: #102b23;
-        border: 1px dashed #477661;
-        border-radius: 6px;
-        color: #93cdb0;
+        background: rgba(4, 18, 38, 0.9);
+        border: 1px dashed rgba(88, 216, 208, 0.45);
+        border-radius: 8px;
+        color: #89d4c4;
         font-size: 10px;
         font-weight: 700;
     }
 
     #practicalCardTitle {
-        color: #e8fff2;
+        color: #f0f7ff;
         font-size: 14px;
         font-weight: 700;
     }
 
     #practicalCardSummary {
-        color: #a7c7b7;
+        color: #8faec8;
         font-size: 11px;
     }
 
     #mathPlotPreview {
-        background: #071512;
-        border: 1px solid #285244;
-        border-radius: 8px;
-        color: #8eb6a4;
+        background: #030e20;
+        border: 1px solid rgba(88, 216, 208, 0.45);
+        border-radius: 12px;
+        color: #89b4c8;
         padding: 8px;
     }
 
     #mathResults, #mathExplanation {
-        background: #091713;
-        border: 1px solid #204837;
-        border-radius: 8px;
-        color: #dff8eb;
+        background: #041428;
+        border: 1px solid rgba(88, 216, 208, 0.35);
+        border-radius: 10px;
+        color: #dff0f8;
         padding: 12px;
     }
 
     #mathFunctionInput {
-        background: rgba(6, 26, 21, 0.95);
-        border: 1.5px solid rgba(81, 204, 175, 0.55);
+        background: rgba(5, 20, 42, 0.95);
+        border: 1.5px solid rgba(88, 216, 208, 0.55);
         border-radius: 10px;
-        color: #6cf5c2;
+        color: #57fabc;
         font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
         font-size: 14px;
         font-weight: 600;
@@ -423,13 +498,13 @@ def build_stylesheet() -> str:
     }
 
     #mathFunctionInput:hover {
-        border-color: rgba(125, 255, 214, 0.85);
-        background: rgba(8, 35, 28, 0.95);
+        border-color: rgba(87, 250, 188, 0.85);
+        background: rgba(8, 28, 56, 0.95);
     }
 
     #mathFunctionInput:focus {
         border: 2px solid #57fabc;
-        background: rgba(9, 40, 32, 0.98);
+        background: rgba(10, 34, 68, 0.98);
         color: #ffffff;
     }
 
@@ -447,24 +522,24 @@ def build_stylesheet() -> str:
     }
 
     #mathTutorSidebar, #labTutorPanel {
-        background: rgba(8, 26, 22, 0.96);
-        border: 1px solid rgba(89, 220, 169, 0.38);
-        border-radius: 12px;
-        padding: 4px;
+        background: rgba(4, 18, 38, 0.95);
+        border: 1px solid rgba(88, 216, 208, 0.4);
+        border-radius: 14px;
+        padding: 6px;
     }
 
     #labEquation {
-        background: #091713;
-        border: 1px solid #204837;
-        border-radius: 8px;
-        color: #b7f4d0;
-        padding: 5px 9px;
+        background: rgba(4, 18, 38, 0.9);
+        border: 1px solid rgba(88, 216, 208, 0.35);
+        border-radius: 10px;
+        color: #57fabc;
+        padding: 8px 12px;
         font-family: serif;
         font-size: 15px;
     }
 
     #labModelNote {
-        color: #87a596;
+        color: #89b4c8;
         font-size: 10px;
     }
 
@@ -492,18 +567,18 @@ def build_stylesheet() -> str:
     }
 
     #chatView {
-        background: rgba(2, 17, 15, 0.98);
-        border: 1px solid rgba(53, 170, 149, 0.18);
-        border-radius: 12px;
-        padding: 18px 22px;
-        color: #e0fff7;
-        font-size: 14px;
+        background: rgba(3, 15, 32, 0.98);
+        border: 1px solid rgba(88, 216, 208, 0.32);
+        border-radius: 14px;
+        padding: 16px 20px;
+        color: #eaf7f5;
+        font-size: 13px;
         line-height: 1.55;
     }
 
     #chatRail {
-        background: rgba(3, 20, 17, 0.98);
-        border: 1px solid rgba(53, 170, 149, 0.3);
+        background: rgba(4, 18, 36, 0.98);
+        border: 1px solid rgba(88, 216, 208, 0.3);
         border-radius: 12px;
     }
 
@@ -512,36 +587,88 @@ def build_stylesheet() -> str:
         font-size: 13px;
     }
 
+    #terminalCmdBar {
+        background: rgba(3, 15, 32, 0.7);
+        border: 1px solid rgba(88, 216, 208, 0.25);
+        border-radius: 8px;
+        padding: 4px 8px;
+    }
+
+    #terminalQuickCmd {
+        background: rgba(8, 28, 54, 0.85);
+        border: 1px solid rgba(88, 216, 208, 0.35);
+        border-radius: 6px;
+        color: #57fabc;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 9px;
+    }
+
+    #terminalQuickCmd:hover {
+        background: rgba(40, 160, 220, 0.35);
+        border-color: #57fabc;
+        color: #ffffff;
+    }
+
+    #terminalInputLine {
+        background: rgba(2, 9, 20, 0.98);
+        border: 1.2px solid rgba(88, 216, 208, 0.45);
+        border-radius: 10px;
+        padding: 4px 10px;
+    }
+
+    #terminalInputLine:focus-within {
+        border-color: #57fabc;
+    }
+
+    #terminalPromptBadge {
+        background: transparent;
+        border: none;
+        color: #57fabc;
+        font-family: 'JetBrains Mono', 'Fira Code', 'DejaVu Sans Mono', monospace;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 0;
+        min-height: 38px;
+    }
+
     #composer {
-        background: rgba(7, 23, 20, 0.9);
-        border: 1px solid rgba(83, 200, 171, 0.38);
-        border-radius: 12px;
-        color: #ebfff8;
-        padding: 14px 16px;
-        font-size: 14px;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: #ffffff;
+        font-family: 'JetBrains Mono', 'Fira Code', 'DejaVu Sans Mono', monospace;
+        padding: 4px 8px;
+        font-size: 13px;
+    }
+
+    #composer:focus {
+        border: none;
+        color: #ffffff;
     }
 
     QComboBox {
-        background: rgba(7, 29, 25, 0.9);
-        border: 1px solid rgba(81, 204, 175, 0.45);
+        background: rgba(6, 24, 46, 0.9);
+        border: 1px solid rgba(88, 216, 208, 0.45);
         border-radius: 10px;
-        color: #d8fff4;
-        padding: 12px 30px 12px 12px;
+        color: #eaf7f5;
+        padding: 10px 28px 10px 12px;
         min-width: 190px;
     }
 
     #modelBar {
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(6, 26, 22, 0.95), stop:1 rgba(9, 36, 30, 0.95));
-        border: 1px solid rgba(81, 204, 175, 0.4);
-        border-radius: 12px;
+        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(6, 24, 46, 0.95), stop:1 rgba(8, 32, 60, 0.95));
+        border: 1px solid rgba(88, 216, 208, 0.35);
+        border-radius: 14px;
         padding: 8px 12px;
     }
 
     #modelEyebrow {
-        background: rgba(14, 56, 46, 0.9);
-        border: 1px solid rgba(81, 204, 175, 0.45);
+        background: rgba(14, 52, 90, 0.9);
+        border: 1px solid rgba(88, 216, 208, 0.45);
         border-radius: 6px;
-        color: #6cf5c2;
+        color: #57fabc;
         font-size: 10px;
         font-weight: 800;
         letter-spacing: 0.12em;
@@ -549,8 +676,8 @@ def build_stylesheet() -> str:
     }
 
     #modelSelector {
-        background: rgba(6, 24, 20, 0.95);
-        border: 1.5px solid rgba(81, 204, 175, 0.45);
+        background: rgba(4, 18, 36, 0.95);
+        border: 1.5px solid rgba(88, 216, 208, 0.45);
         border-radius: 8px;
         color: #ffffff;
         font-size: 13px;
@@ -560,8 +687,8 @@ def build_stylesheet() -> str:
     }
 
     #modelSelector:hover {
-        border-color: rgba(125, 255, 214, 0.85);
-        background: rgba(9, 36, 30, 0.98);
+        border-color: #57fabc;
+        background: rgba(8, 28, 54, 0.98);
     }
 
     #modelSelector:focus {
@@ -624,19 +751,19 @@ def build_stylesheet() -> str:
     }
 
     #sendButton {
-        background: linear-gradient(180deg, #0ca57d 0%, #0a8d6c 100%);
-        border: 1px solid rgba(125, 255, 214, 0.72);
-        color: #e9fff9;
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a7e78, stop:1 #0c5652);
+        border: 1px solid #57fabc;
+        color: #ffffff;
         border-radius: 12px;
-        padding: 14px 20px;
+        padding: 12px 22px;
         font-size: 12px;
         font-weight: 800;
-        letter-spacing: 0.16em;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
     }
 
     #sendButton:hover {
-        background: linear-gradient(180deg, #11b68a 0%, #0d9d74 100%);
+        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #229e97, stop:1 #106f6a);
     }
 
     #attachButton {
@@ -870,6 +997,237 @@ class ChatWorker(QThread):
                 self.error.emit(str(error))
 
 
+class OSMainPanel(QWidget):
+    """Frosted Glass OS Wallpaper Canvas for Main Window Stack."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("chatPanel")
+        bg_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "assets",
+            "subject_folders",
+            "osbg.png",
+        )
+        self.bg_pixmap = QPixmap(bg_path) if os.path.exists(bg_path) else QPixmap()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        w = self.width()
+        h = self.height()
+        if not self.bg_pixmap.isNull():
+            scaled = self.bg_pixmap.scaled(
+                w,
+                h,
+                Qt.KeepAspectRatioByExpanding,
+                Qt.SmoothTransformation,
+            )
+            sx = (scaled.width() - w) // 2
+            sy = (scaled.height() - h) // 2
+            painter.drawPixmap(0, 0, scaled, sx, sy, w, h)
+            # Translucent dark frosted glass tint
+            painter.fillRect(self.rect(), QColor(2, 11, 24, 160))
+        else:
+            bg_grad = QLinearGradient(0, 0, 0, h)
+            bg_grad.setColorAt(0, QColor("#020b18"))
+            bg_grad.setColorAt(1, QColor("#041830"))
+            painter.fillRect(self.rect(), bg_grad)
+
+
+class OSFolderButton(QPushButton):
+    """3D glossy OS folder card button for the Experiment Library & subjects."""
+
+    def __init__(
+        self,
+        title: str,
+        subtitle: str,
+        symbol: str = "📁",
+        topic_badge: str = "LAB",
+        accent_color: str | QColor = "#57fabc",
+        parent: QWidget | None = None,
+    ):
+        super().__init__(f"{title}\n{subtitle}", parent)
+        self.folder_title = title
+        self.folder_subtitle = subtitle
+        self.symbol = symbol
+        self.topic_badge = topic_badge
+        self.accent_color = QColor(accent_color) if isinstance(accent_color, str) else accent_color
+        self.hovered = False
+        self.elevation_offset = 0
+
+        self.setFixedSize(164, 168)
+        self.setMinimumSize(164, 168)
+        self.setMaximumSize(164, 168)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setAccessibleName(f"{title}: {subtitle}")
+        self.setStyleSheet("background: transparent; border: none;")
+
+    def sizeHint(self) -> QSize:
+        return QSize(164, 168)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(164, 168)
+
+    def enterEvent(self, event):
+        self.hovered = True
+        self.elevation_offset = -6
+        self.update()
+        try:
+            super().enterEvent(event)
+        except Exception:
+            pass
+
+    def leaveEvent(self, event):
+        self.hovered = False
+        self.elevation_offset = 0
+        self.update()
+        try:
+            super().leaveEvent(event)
+        except Exception:
+            pass
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        w = float(self.width())
+        h = float(self.height())
+        dy = float(self.elevation_offset)
+
+        tile_w = 146.0
+        tile_h = 106.0
+        tile_x = (w - tile_w) / 2.0
+        tile_y = 10.0 + dy
+
+        tile_rect = QRectF(tile_x, tile_y, tile_w, tile_h)
+
+        # 1. Hover Ambient Glow
+        if self.hovered:
+            glow_grad = QRadialGradient(tile_rect.center(), tile_w * 0.8)
+            glow_col = QColor(self.accent_color)
+            glow_col.setAlpha(75)
+            glow_grad.setColorAt(0, glow_col)
+            glow_grad.setColorAt(0.7, QColor(glow_col.red(), glow_col.green(), glow_col.blue(), 20))
+            glow_grad.setColorAt(1, QColor(0, 0, 0, 0))
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(glow_grad)
+            painter.drawRoundedRect(tile_rect.adjusted(-10, -10, 10, 10), 20, 20)
+
+        # 2. Translucent Glass Tile
+        glass_grad = QLinearGradient(tile_x, tile_y, tile_x, tile_y + tile_h)
+        if self.hovered:
+            glass_grad.setColorAt(0, QColor(14, 46, 82, 195))
+            glass_grad.setColorAt(1, QColor(8, 28, 54, 220))
+            border_pen = QPen(self.accent_color, 1.5)
+        else:
+            glass_grad.setColorAt(0, QColor(10, 34, 64, 140))
+            glass_grad.setColorAt(1, QColor(5, 20, 42, 175))
+            border_pen = QPen(QColor(88, 216, 208, 65), 1.0)
+
+        painter.setPen(border_pen)
+        painter.setBrush(glass_grad)
+        painter.drawRoundedRect(tile_rect, 16, 16)
+
+        # Top gloss highlight
+        hl_rect = QRectF(tile_x + 2, tile_y + 2, tile_w - 4, 28)
+        hl_grad = QLinearGradient(hl_rect.topLeft(), hl_rect.bottomLeft())
+        hl_grad.setColorAt(0, QColor(255, 255, 255, 35))
+        hl_grad.setColorAt(1, QColor(255, 255, 255, 0))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(hl_grad)
+        painter.drawRoundedRect(hl_rect, 14, 14)
+
+        # 3. Vector stylized folder icon
+        fx = tile_x + (tile_w - 74) / 2.0
+        fy = tile_y + 16
+        self._draw_vector_folder(painter, fx, fy)
+
+        # 4. Item Title and Subtitle Below
+        title_font = QFont("sans-serif", 9, QFont.Bold if self.hovered else QFont.Normal)
+        painter.setFont(title_font)
+        painter.setPen(QColor("#ffffff") if self.hovered else QColor("#e0f4ee"))
+        fm = QFontMetrics(title_font)
+        elided_title = fm.elidedText(self.folder_title, Qt.ElideMiddle, int(w - 12))
+        title_rect = QRectF(4, tile_y + tile_h + 4, w - 8, 18)
+        painter.drawText(title_rect, Qt.AlignCenter, elided_title)
+
+        sub_font = QFont("sans-serif", 8, QFont.Normal)
+        painter.setFont(sub_font)
+        painter.setPen(QColor("#89b6a8"))
+        fm_sub = QFontMetrics(sub_font)
+        elided_sub = fm_sub.elidedText(self.folder_subtitle, Qt.ElideRight, int(w - 12))
+        sub_rect = QRectF(4, tile_y + tile_h + 23, w - 8, 16)
+        painter.drawText(sub_rect, Qt.AlignCenter, elided_sub)
+
+    def _draw_vector_folder(self, painter: QPainter, x: float, y: float):
+        painter.save()
+        # 1. Back tab
+        tab_path = QPainterPath()
+        tab_path.moveTo(x + 4, y + 14)
+        tab_path.lineTo(x + 28, y + 14)
+        tab_path.lineTo(x + 36, y + 22)
+        tab_path.lineTo(x + 68, y + 22)
+        tab_path.quadTo(x + 72, y + 22, x + 72, y + 26)
+        tab_path.lineTo(x + 72, y + 60)
+        tab_path.lineTo(x + 2, y + 60)
+        tab_path.lineTo(x + 2, y + 18)
+        tab_path.quadTo(x + 2, y + 14, x + 6, y + 14)
+        tab_path.closeSubpath()
+
+        tab_grad = QLinearGradient(x, y + 14, x, y + 60)
+        tab_grad.setColorAt(0, self.accent_color.darker(120))
+        tab_grad.setColorAt(1, self.accent_color.darker(170))
+        painter.setBrush(tab_grad)
+        painter.setPen(QPen(self.accent_color.lighter(130), 1.2))
+        painter.drawPath(tab_path)
+
+        # 2. Front body (Glossy 3D folder flap)
+        front_rect = QRectF(x + 2, y + 23, 70, 43)
+        front_grad = QLinearGradient(front_rect.topLeft(), front_rect.bottomLeft())
+        front_grad.setColorAt(0, self.accent_color)
+        front_grad.setColorAt(0.55, self.accent_color.darker(115))
+        front_grad.setColorAt(1, self.accent_color.darker(145))
+        painter.setBrush(front_grad)
+        painter.setPen(QPen(QColor(255, 255, 255, 110), 1.2))
+        painter.drawRoundedRect(front_rect, 7, 7)
+
+        # 3. Top Specular Shine
+        shine_rect = QRectF(front_rect.left() + 2, front_rect.top() + 2, front_rect.width() - 4, 11)
+        shine_grad = QLinearGradient(shine_rect.topLeft(), shine_rect.bottomLeft())
+        shine_grad.setColorAt(0, QColor(255, 255, 255, 120))
+        shine_grad.setColorAt(1, QColor(255, 255, 255, 0))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(shine_grad)
+        painter.drawRoundedRect(shine_rect, 5, 5)
+
+        # 4. Topic Symbol Emblem
+        symbol_font = QFont("sans-serif", 13)
+        painter.setFont(symbol_font)
+        painter.setPen(QColor(255, 255, 255, 230))
+        painter.drawText(QRectF(front_rect.left(), front_rect.top() + 4, front_rect.width(), 20), Qt.AlignCenter, self.symbol)
+
+        # 5. Glowing Topic / Lab Badge
+        badge_w = 54.0
+        badge_h = 13.0
+        badge_x = front_rect.center().x() - (badge_w / 2.0)
+        badge_y = front_rect.bottom() - 17.0
+        badge_rect = QRectF(badge_x, badge_y, badge_w, badge_h)
+
+        painter.setBrush(QColor(4, 16, 32, 215))
+        painter.setPen(QPen(QColor(255, 255, 255, 180), 0.8))
+        painter.drawRoundedRect(badge_rect, 4, 4)
+
+        badge_font = QFont("sans-serif", 6, QFont.Bold)
+        painter.setFont(badge_font)
+        painter.setPen(QColor("#ffffff"))
+        painter.drawText(badge_rect, Qt.AlignCenter, self.topic_badge)
+
+        painter.restore()
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -931,6 +1289,10 @@ class MainWindow(QMainWindow):
         self.chat_render_timer.setInterval(40)
         self.chat_render_timer.timeout.connect(self._flush_chat_render)
         self.chat_render_dirty = False
+        self._offline_timer = QTimer(self)
+        self._offline_timer.timeout.connect(self._tick_offline_stream)
+        self._pending_tokens = []
+        self._current_token_idx = 0
         self.base_url = ""
         self.api_key = ""
         self.active_model = ""
@@ -953,14 +1315,19 @@ class MainWindow(QMainWindow):
         root = QWidget()
         root.setObjectName("root")
         outer = QHBoxLayout(root)
-        outer.setContentsMargins(18, 18, 18, 18)
-        outer.setSpacing(18)
+        outer.setContentsMargins(14, 14, 14, 14)
+        outer.setSpacing(14)
+
+        self.os_sidebar = OSSidebar(self)
+        self.os_sidebar.navigate.connect(self._on_os_sidebar_navigate)
+        outer.addWidget(self.os_sidebar)
 
         sidebar = QWidget()
         self.sidebar = sidebar
         sidebar.setObjectName("sidebar")
         sidebar.setMinimumWidth(0)
         sidebar.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
+        sidebar.hide()
         side_layout = QVBoxLayout(sidebar)
         side_layout.setContentsMargins(18, 18, 18, 18)
         side_layout.setSpacing(12)
@@ -1072,89 +1439,37 @@ class MainWindow(QMainWindow):
         lab_note.setWordWrap(True)
         side_layout.addWidget(lab_note)
 
-        main_panel = QWidget()
+        main_panel = OSMainPanel()
         main_panel.setObjectName("chatPanel")
         main_panel.setMinimumWidth(0)
         main_panel.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
         main_layout = QVBoxLayout(main_panel)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(14)
+        main_layout.setContentsMargins(14, 14, 14, 14)
+        main_layout.setSpacing(10)
 
-        header = QWidget()
-        header.setObjectName("headerBar")
-        header.setMinimumWidth(0)
-        header.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
-        header_layout = QHBoxLayout(header)
-        self.header_layout = header_layout
-        header_layout.setContentsMargins(16, 10, 16, 10)
-        header_layout.setSpacing(18)
+        self.os_header = OSHeader(self)
+        self.os_header.back_clicked.connect(self.open_desktop)
+        self.os_header.minimize_clicked.connect(self.showMinimized)
+        self.os_header.maximize_clicked.connect(self._toggle_window_maximize)
+        self.os_header.close_clicked.connect(self.close)
+        self.os_header.search_triggered.connect(self._on_spotlight_search)
+        self.os_header.item_opened.connect(self._on_spotlight_item_opened)
+        main_layout.addWidget(self.os_header)
 
-        self.mobile_menu_button = QPushButton("Menu")
-        self.mobile_menu_button.setObjectName("newChatButton")
-        self.mobile_menu_button.setAccessibleName("Open app navigation")
-        self.mobile_menu_button.clicked.connect(self._show_mobile_navigation)
-        self.mobile_menu_button.hide()
-        header_layout.addWidget(self.mobile_menu_button)
-
-        self.back_button = QPushButton("← Back")
-        self.back_button.setObjectName("newChatButton")
-        self.back_button.hide()
-        self.back_button.clicked.connect(self.navigate_back)
-        header_layout.addWidget(self.back_button)
-
-        brand = QLabel("Fuserio")
-        brand.setObjectName("brand")
-        brand_logo = QLabel()
-        brand_logo.setObjectName("brandLogo")
-        brand_logo.setFixedSize(44, 44)
-        brand_logo.setPixmap(
-            QPixmap(self.logo_path).scaled(
-                44,
-                44,
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation,
-            )
-        )
-        header_layout.addWidget(brand_logo)
-        header_layout.addWidget(brand)
-        header_layout.addStretch()
-
+        # Legacy compatibility aliases for window controls, status, and navigation
+        self.header_layout = QHBoxLayout()
+        self.window_minimize_button = self.os_header.btn_min
+        self.window_maximize_button = self.os_header.btn_max
+        self.window_close_button = self.os_header.btn_close
+        self.back_button = self.os_header.back_button
+        self.connection_status = self.os_header.model_status
+        self.connection_status.setObjectName("statPill")
         self.model_info = QLabel("Select a local model below")
         self.model_info.setObjectName("modelInfo")
-
-        self.connection_status = QLabel("CONNECTING")
-        self.connection_status.setObjectName("statPill")
-
-        self.window_controls = QWidget()
-        self.window_controls.setObjectName("windowControls")
-        window_controls_layout = QHBoxLayout(self.window_controls)
-        window_controls_layout.setContentsMargins(0, 0, 0, 0)
-        window_controls_layout.setSpacing(8)
-
-        self.window_minimize_button = QPushButton("—")
-        self.window_minimize_button.setObjectName("windowControlButton")
-        self.window_minimize_button.setToolTip("Minimize")
-        self.window_minimize_button.clicked.connect(self.showMinimized)
-        window_controls_layout.addWidget(self.window_minimize_button)
-
-        self.window_maximize_button = QPushButton("▢")
-        self.window_maximize_button.setObjectName("windowControlButton")
-        self.window_maximize_button.setToolTip("Maximize")
-        self.window_maximize_button.clicked.connect(self._toggle_window_maximize)
-        window_controls_layout.addWidget(self.window_maximize_button)
-
-        self.window_close_button = QPushButton("×")
-        self.window_close_button.setObjectName("windowControlButton")
-        self.window_close_button.setProperty("variant", "close")
-        self.window_close_button.setToolTip("Close")
-        self.window_close_button.clicked.connect(self.close)
-        window_controls_layout.addWidget(self.window_close_button)
-
-        header_layout.addWidget(self.model_info)
-        header_layout.addWidget(self.connection_status)
-        header_layout.addWidget(self.window_controls)
-
-        main_layout.addWidget(header)
+        self.mobile_menu_button = QPushButton("Menu")
+        self.mobile_menu_button.setObjectName("newChatButton")
+        self.mobile_menu_button.clicked.connect(self._show_mobile_navigation)
+        self.mobile_menu_button.hide()
 
         self.content_stack = QStackedWidget()
         self.content_stack.setMinimumWidth(0)
@@ -1167,13 +1482,23 @@ class MainWindow(QMainWindow):
         self._build_chemistry_practical_pages()
         self._build_math_analysis_page()
 
+        self.explorer_page = OSFolderExplorerView(self)
+        self.explorer_page.navigate_to_desktop.connect(self.open_desktop)
+        self.explorer_page.launch_experiment.connect(self._launch_explorer_experiment)
+        self.explorer_page.launch_topic_mode.connect(self._launch_explorer_topic_mode)
+        self.explorer_page.open_ai_chat.connect(self._open_explorer_ai_chat)
+        self.content_stack.addWidget(self.explorer_page)
+
+        self.desktop_page = OSDesktopView(self)
+        self.desktop_page.subject_selected.connect(self._on_desktop_subject_selected)
+        self.desktop_page.launch_action.connect(self._on_os_sidebar_navigate)
+        self.content_stack.addWidget(self.desktop_page)
+
         outer.addWidget(sidebar, 1)
         outer.addWidget(main_panel, 5)
 
         self.setCentralWidget(root)
-        self.content_stack.setCurrentWidget(self.level_page)
-        self.gce_screen = "level"
-        self.back_button.hide()
+        self.open_desktop()
         self.statusBar().showMessage("Connecting to local model...")
         QShortcut(QKeySequence("Ctrl+N"), self, self.new_chat)
         QShortcut(QKeySequence("Ctrl+Comma"), self, self.show_status)
@@ -1203,6 +1528,131 @@ class MainWindow(QMainWindow):
             self._toggle_chemistry_practicals()
         self._select_chemistry_level(level_slug)
         self._select_chemistry_topic(level_slug, topic_number)
+
+    def open_desktop(self):
+        self.active_workspace = "desktop"
+        self.sidebar.hide()
+        self.content_stack.setCurrentWidget(self.desktop_page)
+        if hasattr(self, "os_header"):
+            self.os_header.set_breadcrumb("")
+        if hasattr(self, "os_sidebar"):
+            self.os_sidebar.set_active_screen("desktop")
+        if hasattr(self, "progress"):
+            exp_count = len(self.progress.get("experiments", {}))
+            self.desktop_page.mastery_widget.set_progress(
+                min(100, 50 + exp_count * 8),
+                topics=34,
+                practicals=max(6, exp_count),
+            )
+
+    def open_subject_explorer(self, subject: str):
+        self.active_workspace = "explorer"
+        self.sidebar.hide()
+        if hasattr(self, "os_header"):
+            self.os_header.set_breadcrumb(f"Desktop › {subject}")
+        if hasattr(self, "os_sidebar"):
+            self.os_sidebar.set_active_screen("desktop")
+        self.explorer_page.set_subject(subject)
+        self.content_stack.setCurrentWidget(self.explorer_page)
+
+    def _launch_explorer_experiment(self, experiment_id: str):
+        if experiment_id in {"math_plot", "math_data"}:
+            self.open_math_analysis()
+            return
+        exp = experiment_by_id(experiment_id)
+        if exp:
+            self.open_experiment(experiment_id)
+            return
+
+        for level in CHEMISTRY.levels:
+            for topic in level.topics:
+                for chex in topic.experiments:
+                    if chex.id == experiment_id:
+                        if not self.chemistry_practicals_open:
+                            self._toggle_chemistry_practicals()
+                        self._open_practical_detail(level.slug, topic.number, chex.id)
+                        return
+
+        self.open_experiment_library()
+
+    def _launch_explorer_topic_mode(self, level: str, stream: str, subject: str, topic: str, mode: str):
+        self.gce_level = level
+        self.gce_stream = stream
+        self.gce_subject = subject
+        self.open_gce_subject(subject)
+        prompt = (
+            f"Let's study the topic '{topic}' in {subject} at {level} level in {mode} mode. "
+            f"Please give me a structured lesson breakdown with examples and interactive questions."
+        )
+        display_text = f"Study: {topic} ({mode})"
+        self._submit_tutor_turn(prompt, display_text)
+
+    def _open_explorer_ai_chat(self, subject: str, level: str):
+        self.gce_level = level
+        stream = "Sciences"
+        for st, subs in SUBJECTS.get(level, {}).items():
+            if subject in subs:
+                stream = st
+                break
+        self.gce_stream = stream
+        self.open_gce_subject(subject)
+
+    def _on_desktop_subject_selected(self, subject: str):
+        self.open_subject_explorer(subject)
+
+    def _on_os_sidebar_navigate(self, action_key: str):
+        if action_key == "desktop":
+            self.open_desktop()
+        elif action_key == "gce":
+            self.open_gce_levels()
+        elif action_key == "lab":
+            self.open_experiment_library()
+        elif action_key == "chat":
+            self.open_ai_workspace()
+        elif action_key == "math":
+            self.open_math_analysis()
+        elif action_key == "settings":
+            self.show_status()
+        elif action_key in {"shutdown", "exit"}:
+            self.show_shutdown_overlay("shutdown")
+        elif action_key == "restart":
+            self.show_shutdown_overlay("restart")
+        elif action_key == "lock":
+            self.show_shutdown_overlay("lock")
+
+    def show_shutdown_overlay(self, mode: str = "shutdown"):
+        """Displays Windows-style animated fading shutdown/restart/lock screen."""
+        if hasattr(self, "shutdown_overlay") and self.shutdown_overlay:
+            try:
+                self.shutdown_overlay.deleteLater()
+            except Exception:
+                pass
+            self.shutdown_overlay = None
+
+        self.shutdown_overlay = OSShutdownOverlay(mode=mode, parent=self)
+        self.shutdown_overlay.resize(self.size())
+        self.shutdown_overlay.shutdown_completed.connect(self.close)
+        self.shutdown_overlay.restart_completed.connect(self.open_desktop)
+        self.shutdown_overlay.show()
+        self.shutdown_overlay.raise_()
+        self.shutdown_overlay.setFocus()
+
+    def _on_spotlight_search(self, query: str):
+        self.open_ai_workspace()
+        self.input.setPlainText(query)
+        self.send_message()
+
+    def _on_spotlight_item_opened(self, category: str, identifier: str):
+        if category == "subject":
+            self._on_desktop_subject_selected(identifier)
+        elif category == "lab":
+            self.open_experiment(identifier)
+        elif category == "math":
+            self.open_math_analysis()
+        elif category == "chat":
+            self.open_ai_workspace()
+        elif category == "ai_prompt":
+            self._on_spotlight_search(identifier)
 
     def _build_chat_page(self):
         page = QWidget()
@@ -1276,23 +1726,61 @@ class MainWindow(QMainWindow):
         self._update_model_detail()
         layout.addWidget(model_bar)
 
-        composer = QWidget()
-        composer_layout = QHBoxLayout(composer)
-        composer_layout.setContentsMargins(0, 0, 0, 0)
-        composer_layout.setSpacing(12)
+        # Quick clickable terminal help command bar
+        cmd_bar = QWidget()
+        cmd_bar.setObjectName("terminalCmdBar")
+        cmd_layout = QHBoxLayout(cmd_bar)
+        cmd_layout.setContentsMargins(6, 2, 6, 2)
+        cmd_layout.setSpacing(6)
+
+        prefix_lbl = QLabel("HELP COMMANDS:")
+        prefix_lbl.setStyleSheet("color: #7ea5c4; font-size: 10px; font-weight: bold; font-family: monospace;")
+        cmd_layout.addWidget(prefix_lbl)
+
+        quick_cmds = [
+            ("help", "Display command reference"),
+            ("clear", "Clear terminal screen"),
+            ("solve <eq>", "Step-by-step math calculation"),
+            ("quiz <topic>", "Generate past-paper drill"),
+            ("chemistry", "Switch to Chemistry mode"),
+            ("physics", "Switch to Physics mode"),
+            ("biology", "Switch to Biology mode"),
+            ("maths", "Switch to Mathematics mode"),
+        ]
+        for cmd_name, tip in quick_cmds:
+            btn = QPushButton(f"$ {cmd_name}")
+            btn.setObjectName("terminalQuickCmd")
+            btn.setToolTip(tip)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda _=False, c=cmd_name: self._on_quick_cmd_clicked(c))
+            cmd_layout.addWidget(btn)
+        cmd_layout.addStretch(1)
+        layout.addWidget(cmd_bar)
+
+        terminal_input_line = QWidget()
+        terminal_input_line.setObjectName("terminalInputLine")
+        term_layout = QHBoxLayout(terminal_input_line)
+        term_layout.setContentsMargins(12, 6, 12, 6)
+        term_layout.setSpacing(8)
+
+        self.terminal_prompt_lbl = QLabel("fuserio@gce-os:~$")
+        self.terminal_prompt_lbl.setObjectName("terminalPromptBadge")
+        term_layout.addWidget(self.terminal_prompt_lbl)
 
         self.input = InputField()
         self.input.setObjectName("composer")
-        composer_layout.addWidget(self.input, 1)
+        self.input.setPlaceholderText("Type command or query (e.g. explain electrolysis, solve x^2-4=0, help, clear)...")
+        term_layout.addWidget(self.input, 1)
 
-        self.send_button = QPushButton("Send")
+        self.send_button = QPushButton("↵ RUN")
         self.send_button.setObjectName("sendButton")
         self.send_button.setEnabled(False)
-        composer_layout.addWidget(self.send_button)
+        self.send_button.setToolTip("Execute command (Return)")
+        term_layout.addWidget(self.send_button)
         self.send_button.clicked.connect(self._send_or_stop)
         self.model_selector.currentIndexChanged.connect(self._model_selected)
         self.model_reconnect_button.clicked.connect(self._retry_selected_model)
-        layout.addWidget(composer)
+        layout.addWidget(terminal_input_line)
 
         self.chat_page = page
         self.content_stack.addWidget(page)
@@ -1388,15 +1876,33 @@ class MainWindow(QMainWindow):
         )
         self.lab_subject_grid = QGridLayout()
         self.lab_subject_grid.setSpacing(14)
+        subject_configs = {
+            "Chemistry": ("⚗", "CHEMISTRY", "#57fabc"),
+            "Biology": ("🔬", "BIOLOGY", "#ff9f43"),
+            "Physics": ("🎯", "PHYSICS", "#3867d6"),
+        }
         for index, subject in enumerate(LAB_SUBJECTS):
             count = len(experiments_for_subject(subject))
-            button = self._study_card(subject, f"{count} interactive experiments  ·  OPEN LAB  →")
+            sym, bdg, col = subject_configs.get(subject, ("📁", "LAB", "#58d8d0"))
+            button = self._study_card(
+                subject,
+                f"{count} interactive experiments  ·  OPEN LAB  →",
+                symbol=sym,
+                topic_badge=bdg,
+                accent_color=col,
+            )
             button.clicked.connect(lambda _checked=False, value=subject: self.open_experiments_subject(value))
             self.lab_subject_grid.addWidget(button, 0, index)
-        math_card = self._study_card("Math Data Lab", "Plot functions and analyze measurements")
+        math_card = self._study_card(
+            "Math Data Lab",
+            "Plot functions and analyze measurements",
+            symbol="📐",
+            topic_badge="ANALYSIS",
+            accent_color="#20bf6b",
+        )
         math_card.setAccessibleName("Open Mathematics data analysis workspace")
         math_card.clicked.connect(self.open_math_analysis)
-        self.lab_subject_grid.addWidget(math_card, 1, 0)
+        self.lab_subject_grid.addWidget(math_card, 0, len(LAB_SUBJECTS))
         lab_home_scroll = QScrollArea()
         lab_home_scroll.setWidgetResizable(True)
         lab_home_scroll.setFrameShape(QScrollArea.NoFrame)
@@ -1939,6 +2445,9 @@ class MainWindow(QMainWindow):
         is_max = self.isMaximized()
         self.window_maximize_button.setText("❐" if is_max else "▢")
         self.window_maximize_button.setToolTip("Restore Down" if is_max else "Maximize")
+        if hasattr(self, "os_header") and hasattr(self.os_header, "btn_max"):
+            self.os_header.btn_max.setText("❐" if is_max else "▢")
+            self.os_header.btn_max.setToolTip("Restore Down" if is_max else "Maximize")
 
     def _schedule_live_math_plot(self):
         if self.math_analysis_page.isVisible():
@@ -1982,20 +2491,25 @@ class MainWindow(QMainWindow):
         self.gce_modes = []
         self.study_context_label.hide()
         self.mode_bar.hide()
+        self.sidebar.hide()
+        if hasattr(self, "os_header"):
+            self.os_header.set_breadcrumb("Desktop › Math Data Lab")
+        if hasattr(self, "os_sidebar"):
+            self.os_sidebar.set_active_screen("math")
         self.back_button.show()
         self.content_stack.setCurrentWidget(self.math_analysis_page)
 
     @staticmethod
     def _math_results_html(result: AnalysisResult) -> str:
         rows = "".join(
-            "<tr><td style='padding:5px 12px 5px 0;color:#8eb6a4;'>"
-            f"{html.escape(name)}</td><td style='padding:5px;color:#e5f5ec;font-weight:bold;'>"
+            "<tr><td style='padding:5px 12px 5px 0;color:#7ea5c4;'>"
+            f"{html.escape(name)}</td><td style='padding:5px;color:#eaf7f5;font-weight:bold;'>"
             f"{html.escape(value)}</td></tr>"
             for name, value in result.metrics.items()
         )
         return (
-            "<html><body style='font-family:DejaVu Sans,sans-serif;font-size:13px;'>"
-            f"<p style='color:#ffe0a6;'>{html.escape(result.summary)}</p>"
+            "<html><body style='font-family:DejaVu Sans,sans-serif;font-size:13px;background:transparent;'>"
+            f"<p style='color:#57fabc;font-weight:bold;'>{html.escape(result.summary)}</p>"
             f"<table>{rows}</table></body></html>"
         )
 
@@ -2039,7 +2553,7 @@ class MainWindow(QMainWindow):
     def _render_math_explanation(self, placeholder: str = ""):
         body = self._format_message_content(self.math_explanation_content) if self.math_explanation_content else html.escape(placeholder)
         self.math_explanation_view.setHtml(
-            "<html><body style='background:#091713;color:#e5f5ec;"
+            "<html><body style='background:#041428;color:#eaf7f5;"
             "font-family:DejaVu Sans,sans-serif;font-size:13px;line-height:1.55;'>"
             f"{body}</body></html>"
         )
@@ -2329,6 +2843,11 @@ class MainWindow(QMainWindow):
     def open_experiment_library(self):
         self.active_workspace = "experiments"
         self.lab_screen = "home"
+        self.sidebar.hide()
+        if hasattr(self, "os_header"):
+            self.os_header.set_breadcrumb("Desktop › Experiment Library")
+        if hasattr(self, "os_sidebar"):
+            self.os_sidebar.set_active_screen("lab")
         self.back_button.hide()
         self.content_stack.setCurrentWidget(self.lab_home_page)
 
@@ -2345,26 +2864,44 @@ class MainWindow(QMainWindow):
         self._clear_layout(self.lab_gallery_grid)
         self.lab_gallery_experiments = list(experiments_for_subject(subject))
         self._populate_lab_gallery()
+        self.sidebar.hide()
+        if hasattr(self, "os_header"):
+            self.os_header.set_breadcrumb(f"Desktop › {subject}")
+        if hasattr(self, "os_sidebar"):
+            self.os_sidebar.set_active_screen("lab")
         self.back_button.show()
         self.content_stack.setCurrentWidget(self.lab_gallery_page)
 
     def _populate_lab_gallery(self):
         self._clear_layout(self.lab_gallery_grid)
         available_width = max(1, self.lab_gallery_scroll.viewport().width() - 24)
-        columns = max(1, min(4, available_width // 280))
+        columns = max(1, min(4, available_width // 220))
         for index, experiment in enumerate(self.lab_gallery_experiments):
             detail = f"{experiment.subtitle}\nOPEN PRE-LAB  →"
-            button = self._study_card(experiment.title, detail)
+            meta = EXPERIMENT_TOPIC_METADATA.get(experiment.identifier, {
+                "topic": "Laboratory", "color": "#58d8d0", "symbol": "⚗", "badge": "LAB"
+            })
+            button = self._study_card(
+                experiment.title,
+                detail,
+                symbol=meta.get("symbol", "⚗"),
+                topic_badge=meta.get("badge", "LAB"),
+                accent_color=meta.get("color", "#58d8d0"),
+            )
             button.setAccessibleName(f"Open {experiment.title} interactive simulation")
             button.clicked.connect(lambda _checked=False, value=experiment.identifier: self.open_experiment(value))
-            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
             self.lab_gallery_grid.addWidget(button, index // columns, index % columns)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        if hasattr(self, "shutdown_overlay") and self.shutdown_overlay and self.shutdown_overlay.isVisible():
+            self.shutdown_overlay.resize(self.size())
         if hasattr(self, "mobile_menu_button"):
             mobile_layout = self.width() < 760
-            self.sidebar.setVisible(not mobile_layout)
+            if getattr(self, "active_workspace", "") in {"desktop", "explorer", "chat", "experiments"}:
+                self.sidebar.hide()
+            else:
+                self.sidebar.setVisible(not mobile_layout)
             self.mobile_menu_button.setVisible(mobile_layout)
             self.model_info.setVisible(not mobile_layout)
             self.connection_status.setVisible(not mobile_layout)
@@ -2434,6 +2971,11 @@ class MainWindow(QMainWindow):
         if identifier not in {"chemistry-playground", "circuit-playground"}:
             self.lab_canvas.play()
         self.lab_play_button.setText("Ⅱ  Pause simulation")
+        self.sidebar.hide()
+        if hasattr(self, "os_header"):
+            self.os_header.set_breadcrumb(f"Desktop › Lab › {experiment.title}")
+        if hasattr(self, "os_sidebar"):
+            self.os_sidebar.set_active_screen("lab")
         self.back_button.show()
         self.content_stack.setCurrentWidget(self.lab_detail_page)
 
@@ -2913,14 +3455,31 @@ class MainWindow(QMainWindow):
         return page
 
     @staticmethod
-    def _study_card(title: str, detail: str) -> QPushButton:
-        button = QPushButton(f"{title}\n{detail}")
+    def _study_card(
+        title: str,
+        detail: str,
+        symbol: str = "📁",
+        topic_badge: str = "LAB",
+        accent_color: str = "#57fabc",
+    ) -> QPushButton:
+        button = OSFolderButton(
+            title=title,
+            subtitle=detail.split("\n", 1)[0] if "\n" in detail else detail,
+            symbol=symbol,
+            topic_badge=topic_badge,
+            accent_color=accent_color,
+        )
+        button.setText(f"{title}\n{detail}")
         button.setObjectName("studyCard")
-        button.setMinimumHeight(96)
         return button
 
     def open_gce_levels(self):
         self.active_workspace = "gce"
+        self.sidebar.hide()
+        if hasattr(self, "os_header"):
+            self.os_header.set_breadcrumb("Desktop › GCE Syllabus")
+        if hasattr(self, "os_sidebar"):
+            self.os_sidebar.set_active_screen("gce")
         selection = self.progress.get("selection", {})
         level = selection.get("level", "")
         stream = selection.get("stream", "")
@@ -2938,15 +3497,21 @@ class MainWindow(QMainWindow):
 
     def open_ai_workspace(self):
         self.active_workspace = "chat"
-        self.gce_level = ""
-        self.gce_stream = ""
-        self.gce_subject = ""
+        self.sidebar.hide()
+        if hasattr(self, "os_header"):
+            self.os_header.set_breadcrumb("Desktop › Fuserio AI Tutor")
+        if hasattr(self, "os_sidebar"):
+            self.os_sidebar.set_active_screen("chat")
+        self.gce_level = self.gce_level or "Ordinary Level"
+        self.gce_stream = self.gce_stream or "Sciences"
+        self.gce_subject = self.gce_subject or "Physics"
         self.gce_system_prompt = ""
         self.gce_modes = []
         self.gce_screen = "chat"
         self.study_context_label.hide()
-        self.mode_bar.hide()
+        self.mode_bar.show()
         self.back_button.hide()
+        self.send_button.setEnabled(True)
         self.content_stack.setCurrentWidget(self.chat_page)
         self._render_messages()
 
@@ -2997,6 +3562,12 @@ class MainWindow(QMainWindow):
     def open_gce_subject(self, subject: str):
         if subject not in SUBJECTS.get(self.gce_level, {}).get(self.gce_stream, []):
             return
+        self.active_workspace = "chat"
+        self.sidebar.hide()
+        if hasattr(self, "os_header"):
+            self.os_header.set_breadcrumb(f"Desktop › {self.gce_level} › {subject} AI Tutor")
+        if hasattr(self, "os_sidebar"):
+            self.os_sidebar.set_active_screen("chat")
         self.gce_subject = subject
         self.gce_system_prompt = build_tutor_system_prompt(
             self.gce_level,
@@ -3012,14 +3583,13 @@ class MainWindow(QMainWindow):
             self.gce_modes = saved_session.get("modes", [])
         else:
             self.gce_modes = []
-            self.messages = [{"role": "assistant", "content": "", "reasoning": ""}]
         self.study_context_label.setText(
             f"CAMEROON GCE  /  {self.gce_level.upper()}  /  {self.gce_stream.upper()}  /  {subject.upper()}\n"
             "Suggested topic areas are a study scaffold, not a verified or exhaustive official syllabus."
         )
-        self.study_context_label.show()
+        self.study_context_label.hide()
         self.mode_bar.show()
-        self.back_button.show()
+        self.back_button.hide()
         self.gce_screen = "chat"
         self.content_stack.setCurrentWidget(self.chat_page)
         self._save_selection()
@@ -3116,8 +3686,8 @@ class MainWindow(QMainWindow):
     def start_learning_mode(self, mode: str):
         if mode not in LEARNING_MODES or not self.gce_subject:
             return
-        if not self.base_url or (self.chat_worker and self.chat_worker.isRunning()):
-            self.statusBar().showMessage("Wait for the local model to be ready before starting a study activity.")
+        if (self.chat_worker and self.chat_worker.isRunning()) or (hasattr(self, "_offline_timer") and self._offline_timer.isActive()):
+            self.statusBar().showMessage("Wait for the current response to complete.")
             return
         self.gce_modes.append({"mode": mode, "time": int(time.time())})
         self._schedule_progress_save()
@@ -3187,31 +3757,113 @@ class MainWindow(QMainWindow):
         self._render_messages()
         self.statusBar().showMessage("Fresh session started")
 
+    def clear_chat(self):
+        if self.chat_worker and self.chat_worker.isRunning():
+            self.stop_streaming()
+        self.messages.clear()
+        self.chat_view.clear()
+        self.input.clear()
+        self._render_messages()
+        self.statusBar().showMessage("Terminal screen cleared")
+
     def stop_streaming(self):
+        if hasattr(self, "_offline_timer") and self._offline_timer.isActive():
+            self._offline_timer.stop()
         if self.chat_worker and self.chat_worker.isRunning():
             self.chat_worker.cancel()
-            self.send_button.setEnabled(False)
-            self.send_button.setText("Stopping")
-            self.statusBar().showMessage("Stopping response...")
+        if self.messages and self.messages[-1]["role"] == "assistant":
+            self.messages[-1]["streaming"] = False
+        self.send_button.setEnabled(True)
+        self.send_button.setText("Send")
+        self.statusBar().showMessage("Response stopped.")
+        self._render_messages()
 
     def show_status(self):
         self.statusBar().showMessage("Settings panel pending")
 
     def send_message(self):
-        if not self.base_url or (self.chat_worker and self.chat_worker.isRunning()):
+        if (self.chat_worker and self.chat_worker.isRunning()) or (hasattr(self, "_offline_timer") and self._offline_timer.isActive()):
             return
         message = self.input.toPlainText().strip()
         if not message:
+            return
+
+        cmd = message.lower().strip()
+        if cmd in {"clear", "/clear", "cls"}:
+            self.clear_chat()
+            return
+        if cmd in {"help", "/help", "man", "--help", "-h"}:
+            self.input.clear()
+            self.messages.append({"role": "user", "content": message})
+            help_content = (
+                "**FUSERIO NEURAL SHELL v2.4 (MANUAL)**\n\n"
+                "**Command Usage:**\n"
+                "- `ask <query>` : Query offline Cameroon GCE neural synthesizer\n"
+                "- `solve <expression>` : Step-by-step mathematical & scientific solution\n"
+                "- `quiz <topic>` : Practice exam questions for Ordinary/Advanced Level\n"
+                "- `explain <concept>` : Detailed conceptual syllabus breakdown\n"
+                "- `clear` : Clear terminal screen and history\n"
+                "- `status` : Print local AI server and offline model status\n\n"
+                "*Tip: You can also enter any syllabus topic directly without a prefix.*"
+            )
+            self.messages.append({"role": "assistant", "content": help_content, "streaming": False})
+            self._render_messages()
+            self._schedule_progress_save()
+            return
+        if cmd in {"status", "/status"}:
+            self.input.clear()
+            self.messages.append({"role": "user", "content": message})
+            status_content = (
+                "**SYSTEM DIAGNOSTICS & HARDWARE COMPUTE**\n\n"
+                f"- **Core Engine:** Fuserio Offline Neural Engine\n"
+                f"- **Active Model:** {self.model_selector.currentText()}\n"
+                f"- **GCE Target:** {self.gce_subject or 'General STEM'} ({self.gce_level or 'All Levels'})\n"
+                "- **Network Mode:** 100% Offline Local Inference\n"
+                "- **Status:** Ready for input"
+            )
+            self.messages.append({"role": "assistant", "content": status_content, "streaming": False})
+            self._render_messages()
+            self._schedule_progress_save()
             return
 
         self.input.clear()
         self._submit_tutor_turn(message, message)
 
     def _send_or_stop(self):
-        if self.chat_worker and self.chat_worker.isRunning():
+        if (self.chat_worker and self.chat_worker.isRunning()) or (hasattr(self, "_offline_timer") and self._offline_timer.isActive()):
             self.stop_streaming()
         else:
             self.send_message()
+
+    def _on_quick_cmd_clicked(self, cmd_name: str):
+        if "<" in cmd_name:
+            prefix = cmd_name.split("<")[0]
+            self.input.setPlainText(prefix)
+            cursor = self.input.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            self.input.setTextCursor(cursor)
+            self.input.setFocus()
+        elif cmd_name in {"chemistry", "physics", "biology", "maths"}:
+            subj_map = {
+                "chemistry": "Chemistry",
+                "physics": "Physics",
+                "biology": "Biology",
+                "maths": "Mathematics",
+            }
+            self.gce_subject = subj_map.get(cmd_name, "General STEM")
+            self.input.setPlainText(f"explain core concepts in {self.gce_subject} ")
+            cursor = self.input.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            self.input.setTextCursor(cursor)
+            self.input.setFocus()
+        elif cmd_name == "clear":
+            self.clear_chat()
+        elif cmd_name == "help":
+            self.input.setPlainText("help")
+            self.send_message()
+        else:
+            self.input.setPlainText(cmd_name)
+            self.input.setFocus()
 
     def _model_selected(self):
         self.generation += 1
@@ -3500,48 +4152,62 @@ class MainWindow(QMainWindow):
 
     def _render_messages(self):
         document = [
-            '<html><body style="background-color:#050d0c;color:#e8f4ef;'
-            'font-family:\'DejaVu Sans\',\'Noto Sans\',sans-serif;font-size:14px;margin:12px;">',
-            '<table width="100%" cellspacing="0" cellpadding="0"><tr>',
-            '<td style="color:#61efba;font-size:10px;">FUSERIO <span style="color:#57756b;">/</span> ',
-            'PRIVATE INFERENCE SESSION</td>',
-            '<td align="right" style="color:#648078;font-size:10px;">',
-            '<span style="color:#55e7ae;">●</span> LOOPBACK ONLY</td>',
-            '</tr></table>',
-            '<hr color="#17332c" size="1">',
+            '<html><head><style>'
+            'body { background-color: #020914; color: #eaf7f5; '
+            'font-family: "JetBrains Mono", "Fira Code", "DejaVu Sans Mono", monospace; font-size: 13px; margin: 16px; }'
+            'table { border-collapse: separate; }'
+            '</style></head><body>',
+            # Terminal Chrome Header
+            '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:14px;border-bottom:1px solid rgba(88,216,208,0.25);padding-bottom:10px;">'
+            '<tr>'
+            '<td width="70" valign="middle">'
+            '  <span style="color:#ff5f56;font-size:14px;">●</span>'
+            '  <span style="color:#ffbd2e;font-size:14px;margin-left:4px;">●</span>'
+            '  <span style="color:#27c93f;font-size:14px;margin-left:4px;">●</span>'
+            '</td>'
+            '<td align="center" valign="middle">'
+            '  <span style="color:#7ea5c4;font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:bold;">fuserio@gce-os: ~ (offline-neural-shell-v2.4) · tty1</span>'
+            '</td>'
+            '<td width="100" align="right" valign="middle">'
+            '  <span style="color:#57fabc;font-family:monospace;font-size:10px;background:rgba(87,250,188,0.12);padding:3px 8px;border-radius:4px;border:1px solid rgba(87,250,188,0.35);font-weight:bold;">● ONLINE</span>'
+            '</td>'
+            '</tr>'
+            '</table>',
         ]
 
         if not self.messages:
             document.append(
-                '<table width="100%" height="360" cellspacing="0" cellpadding="0">'
-                '<tr><td align="center" valign="middle">'
-                '<table cellspacing="0" cellpadding="18" bgcolor="#091713" '
-                'border="1" bordercolor="#1d493a"><tr><td>'
-                '<div style="color:#5ce8ad;font-size:10px;">[ CHANNEL READY ]</div><br>'
-                '<div style="color:#effff7;font-size:24px;font-weight:bold;">Ready to build.</div><br>'
-                '<div style="color:#91aa9e;">Send a prompt to begin a private local session.</div>'
-                '</td></tr></table></td></tr></table>'
+                '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top:10px;">'
+                '<tr><td>'
+                '<div style="color:#57fabc;font-family:\'JetBrains Mono\',\'Fira Code\',monospace;font-size:12px;line-height:1.55;background:rgba(4, 18, 38, 0.7);padding:16px 20px;border:1px solid rgba(88, 216, 208, 0.35);border-radius:8px;">'
+                '<span style="color:#58d8d0;font-weight:bold;">┌── [ FUSERIO NEURAL TERMINAL v2.4 ] ──────────────────────────────────────────┐</span><br>'
+                '│ <span style="color:#ffffff;font-weight:bold;">System:</span> Cameroon GCE Offline Neural Core (100% Offline AI Enabled)           │<br>'
+                '│ <span style="color:#ffffff;font-weight:bold;">Curriculum:</span> Ordinary Level &amp; Advanced Level STEM Syllabi                   │<br>'
+                '│ <span style="color:#ffffff;font-weight:bold;">Status:</span> Ready for commands &amp; syllabus queries. Type below to execute.       │<br>'
+                '│ <span style="color:#7ea5c4;">Built-in Commands:</span>                                                        │<br>'
+                '│   • <span style="color:#57fabc;">ask &lt;query&gt;</span>     : Query offline GCE knowledge engine                    │<br>'
+                '│   • <span style="color:#57fabc;">solve &lt;eq&gt;</span>      : Step-by-step formula and mathematics solver          │<br>'
+                '│   • <span style="color:#57fabc;">quiz &lt;topic&gt;</span>    : Generate past-paper exam drill questions             │<br>'
+                '│   • <span style="color:#57fabc;">clear</span>           : Clear terminal scrollback                            │<br>'
+                '│   • <span style="color:#57fabc;">help</span>            : Print complete command manual                        │<br>'
+                '│ <span style="color:#89b4c8;">Tip: You can also directly type any question without a command prefix.</span>        │<br>'
+                '<span style="color:#58d8d0;font-weight:bold;">└── Enter your prompt below ───────────────────────────────────────────────────┘</span>'
+                '</div>'
+                '</td></tr></table>'
             )
 
         for turn_number, message in enumerate(self.messages, start=1):
             role = message["role"]
             content = self._format_message_content(message.get("content", ""))
-            turn_label = f"TURN {turn_number:03d}"
 
             if role == "user":
                 document.append(
-                    '<table width="100%" cellspacing="0" cellpadding="0"><tr><td align="right">'
-                    '<table width="78%" cellspacing="0" cellpadding="0" bgcolor="#111b18" '
-                    'border="1" bordercolor="#59432b"><tr>'
-                    '<td width="4" bgcolor="#f2ad62"></td>'
-                    '<td style="padding:14px 18px;">'
-                    '<table width="100%" cellspacing="0" cellpadding="0"><tr>'
-                    '<td><span style="color:#ffcb8c;font-weight:bold;">YOU</span> '
-                    '<span style="color:#6b6251;">/ OPERATOR</span></td>'
-                    f'<td align="right" style="color:#8e765a;font-size:10px;">{turn_label} · OUTBOUND</td>'
-                    '</tr></table><br>'
-                    f'<div style="color:#f4efe4;line-height:1.55;">{content}</div>'
-                    '</td></tr></table></td></tr></table><br>'
+                    '<table width="100%" cellspacing="0" cellpadding="0" style="margin: 10px 0 6px 0;">'
+                    '<tr><td>'
+                    '<div style="font-family:\'JetBrains Mono\',\'Fira Code\',monospace;font-size:13px;line-height:1.55;background:rgba(10,36,68,0.7);border-left:3px solid #ffc478;border-radius:4px;padding:9px 14px;">'
+                    f'<span style="color:#57fabc;font-weight:bold;">fuserio@gce-os</span><span style="color:#7ea5c4;">:</span><span style="color:#58d8d0;">~</span><span style="color:#ffc478;font-weight:bold;">$</span> <span style="color:#ffffff;font-weight:bold;">{content}</span>'
+                    '</div>'
+                    '</td></tr></table>'
                 )
                 continue
 
@@ -3549,44 +4215,79 @@ class MainWindow(QMainWindow):
             is_streaming = bool(message.get("streaming"))
             if reasoning:
                 reasoning_panel = (
-                    '<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#071513" '
-                    'border="1" bordercolor="#17423a"><tr>'
-                    '<td width="3" bgcolor="#45c8c0"></td>'
-                    '<td style="padding:10px 14px;">'
-                    '<div style="color:#62d8d0;font-size:10px;font-weight:bold;">'
-                    'THINK TRACE <span style="color:#507873;">/ INTERNAL REASONING</span></div><br>'
-                    f'<div style="color:#a1c9c1;line-height:1.5;">{reasoning}</div>'
-                    '</td></tr></table><br>'
+                    '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:10px;background:rgba(2,10,22,0.9);border:1px solid rgba(88,216,208,0.25);border-radius:4px;">'
+                    '<tr><td style="padding:10px 14px;">'
+                    '<div style="color:#58d8d0;font-size:10px;font-weight:bold;font-family:monospace;margin-bottom:6px;">'
+                    '┌── 🧠 REASONING TRACE ──────────────────────────────────────────────</div>'
+                    f'<div style="color:#89d4c4;line-height:1.5;font-size:12px;padding-left:10px;">{reasoning}</div>'
+                    '<div style="color:#58d8d0;font-size:10px;font-family:monospace;margin-top:6px;">'
+                    '└── [Trace Verified] ───────────────────────────────────────────────</div>'
+                    '</td></tr></table>'
                 )
             else:
                 reasoning_panel = ""
 
+            # Determine subject for this assistant response
+            subj_name = getattr(self, "gce_subject", None) or "Science"
+            if turn_number >= 2 and self.messages[turn_number - 2].get("role") == "user":
+                prev_text = self.messages[turn_number - 2].get("content", "").lower()
+                detected = detect_subject(prev_text)
+                if detected and detected != "Science":
+                    subj_name = detected
+            elif not subj_name or subj_name in {"General STEM", "Science"}:
+                detected = detect_subject(message.get("content", "").lower())
+                if detected:
+                    subj_name = detected
+
+            if subj_name not in SUBJECT_TERMINAL_STYLES:
+                subj_name = "Science"
+
+            style_info = SUBJECT_TERMINAL_STYLES.get(subj_name, SUBJECT_TERMINAL_STYLES["Science"])
+            accent_col = style_info["accent"]
+            box_bg = style_info["bg"]
+            box_border = style_info["border"]
+            badge_title = style_info["badge"]
+            tag_title = style_info["tag"]
+
             if not content:
-                content = '<span style="color:#65efb9;">▋</span> '
-                '<span style="color:#719087;">WAITING FOR MODEL TOKENS</span>'
+                content = f'<span style="color:{accent_col};">▋</span> ' \
+                          '<span style="color:#6ea2c7;">GENERATING RESPONSE...</span>'
             elif is_streaming:
-                content += '<span style="color:#65efb9;">▋</span>'
+                content += f'<span style="color:{accent_col};">▋</span>'
             generating_badge = (
-                f'<span style="color:#70f2b7;">· GENERATING · '
-                f'{message.get("stream_chunks", 0)} TOKENS</span>'
+                f'<span style="color:{accent_col};font-size:10px;font-weight:normal;margin-left:8px;">'
+                f'· GENERATING · {message.get("stream_chunks", 0)} TOKENS</span>'
                 if is_streaming
                 else ""
             )
+            terminal_status_line = (
+                f'<span style="color:{accent_col};">⠋ [GENERATING RESPONSE...]</span>'
+                if is_streaming
+                else f'<span style="color:#6ea2c7;">[Process completed with exit code 0 · GCE Cameroon {subj_name} Engine]</span>'
+            )
 
             document.append(
-                '<table width="100%" cellspacing="0" cellpadding="0"><tr><td>'
-                '<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#0a1714" '
-                'border="1" bordercolor="#1c4537"><tr>'
-                '<td width="4" bgcolor="#59edaa"></td>'
-                '<td style="padding:15px 19px;">'
-                '<table width="100%" cellspacing="0" cellpadding="0"><tr>'
-                '<td><span style="color:#70f2b7;font-weight:bold;">FUSERIO</span> '
-                '<span style="color:#5c8375;">/ LOCAL INTELLIGENCE</span> '
-                f'{generating_badge}</td>'
-                f'<td align="right" style="color:#5e8878;font-size:10px;">{turn_label} · INBOUND</td>'
-                f'</tr></table><br>{reasoning_panel}'
-                f'<div style="color:#e5f5ec;line-height:1.6;">{content}</div>'
-                '</td></tr></table></td></tr></table><br>'
+                '<table width="100%" cellspacing="0" cellpadding="0" style="margin: 6px 0 16px 0;">'
+                '<tr><td>'
+                f'<div style="background:{box_bg};border:1px solid {box_border};border-left:3px solid {accent_col};border-radius:6px;padding:14px 18px;font-family:\'JetBrains Mono\',\'Fira Code\',sans-serif;">'
+                '  <table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:8px;">'
+                '  <tr>'
+                '    <td align="left">'
+                f'      <span style="color:{accent_col};font-family:monospace;font-size:11px;font-weight:bold;">{badge_title}</span>'
+                f'      {generating_badge}'
+                '    </td>'
+                '    <td align="right">'
+                f'      <span style="color:#7ea5c4;font-family:monospace;font-size:10px;">{tag_title} · stdout</span>'
+                '    </td>'
+                '  </tr>'
+                '  </table>'
+                f'{reasoning_panel}'
+                f'<div style="color:#eaf7f5;line-height:1.65;font-size:13px;">{content}</div>'
+                f'<div style="color:#4a7698;font-size:10px;margin-top:10px;font-family:monospace;border-top:1px dashed rgba(88,216,208,0.2);padding-top:6px;">'
+                f'{terminal_status_line}'
+                '</div>'
+                '</div>'
+                '</td></tr></table>'
             )
 
         document.append('</body></html>')
@@ -3595,21 +4296,62 @@ class MainWindow(QMainWindow):
         scrollbar.setValue(scrollbar.maximum())
 
     def _submit_tutor_turn(self, model_prompt: str, display_text: str):
-        if not self.base_url or (self.chat_worker and self.chat_worker.isRunning()):
-            self.statusBar().showMessage("Wait for the local model to be ready before starting a study activity.")
+        if (self.chat_worker and self.chat_worker.isRunning()) or (hasattr(self, "_offline_timer") and self._offline_timer.isActive()):
+            self.statusBar().showMessage("Please wait for current response to complete.")
             return
         self.messages.append({"role": "user", "content": display_text})
-        self.messages.append({"role": "assistant", "content": "", "reasoning": ""})
-        api_messages = [
-            {"role": item["role"], "content": item["content"]}
-            for item in self.messages[:-1]
-        ]
-        api_messages[-1]["content"] = model_prompt
-        if self.gce_system_prompt:
-            api_messages.insert(0, {"role": "system", "content": self.gce_system_prompt})
+        self.messages.append({"role": "assistant", "content": "", "reasoning": "", "streaming": True, "stream_chunks": 0})
+        self.send_button.setText("Stop")
+        self.send_button.setEnabled(True)
         self._render_messages()
         self._schedule_progress_save()
-        self._start_chat_request(api_messages)
+
+        if self.base_url:
+            api_messages = [
+                {"role": item["role"], "content": item["content"]}
+                for item in self.messages[:-1]
+            ]
+            api_messages[-1]["content"] = model_prompt
+            if self.gce_system_prompt:
+                api_messages.insert(0, {"role": "system", "content": self.gce_system_prompt})
+            self._start_chat_request(api_messages)
+        else:
+            self._start_offline_stream(display_text)
+
+    def _start_offline_stream(self, prompt: str):
+        reasoning, full_answer = generate_offline_gce_response(
+            prompt,
+            subject=getattr(self, "gce_subject", ""),
+            level=getattr(self, "gce_level", ""),
+        )
+        self.messages[-1]["reasoning"] = reasoning
+        words = re.findall(r"\S+|\n", full_answer)
+        self._pending_tokens = words
+        self._current_token_idx = 0
+        self.statusBar().showMessage("Fuserio Offline Neural Engine: Streaming response...")
+        self._offline_timer.setInterval(25)
+        self._offline_timer.start()
+
+    def _tick_offline_stream(self):
+        if not self._pending_tokens or self._current_token_idx >= len(self._pending_tokens):
+            self._offline_timer.stop()
+            if self.messages and self.messages[-1]["role"] == "assistant":
+                self.messages[-1]["streaming"] = False
+            self.send_button.setText("Send")
+            self.statusBar().showMessage("Response complete · Fuserio Offline AI")
+            self._schedule_progress_save()
+            self._render_messages()
+            return
+
+        t = self._pending_tokens[self._current_token_idx]
+        self._current_token_idx += 1
+        chunk = "\n" if t == "\n" else t + " "
+
+        self.messages[-1]["content"] += chunk
+        self.messages[-1]["stream_chunks"] = self.messages[-1].get("stream_chunks", 0) + 1
+        self.chat_render_dirty = True
+        if not self.chat_render_timer.isActive():
+            self.chat_render_timer.start()
 
     def _start_chat_request(
         self,
@@ -3671,13 +4413,13 @@ class MainWindow(QMainWindow):
         )
         self.lab_tutor_stream.setHtml(
             '<html><head><style>'
-            'body{background:#071410;color:#e5f5ec;font-family:"DejaVu Sans","Noto Sans",sans-serif;'
+            'body{background:#030f22;color:#eaf7f5;font-family:"DejaVu Sans","Noto Sans",sans-serif;'
             'font-size:14px;line-height:1.65;margin:10px;}'
-            'h1,h2,h3{color:#70edb6;margin-top:18px;margin-bottom:8px;}'
-            'strong{color:#ffe0a6;}li{margin:5px 0;}hr{border:0;border-top:1px solid #285244;}'
-            'code{color:#a8ebca;background:#13261f;}'
+            'h1,h2,h3{color:#57fabc;margin-top:18px;margin-bottom:8px;}'
+            'strong{color:#58d8d0;}li{margin:5px 0;}hr{border:0;border-top:1px solid #18426d;}'
+            'code{color:#89d4c4;background:#092244;border-radius:3px;padding:1px 4px;}'
             '</style></head><body>'
-            '<p style="color:#62d8d0;font-size:10px;font-weight:bold;">FUSERIO / FIELD NOTE</p>'
+            '<p style="color:#57fabc;font-size:10px;font-weight:bold;">FUSERIO / FIELD NOTE</p>'
             f'{body}{footer}</body></html>'
         )
         scrollbar = self.lab_tutor_stream.verticalScrollBar()
@@ -3697,15 +4439,15 @@ class MainWindow(QMainWindow):
                 code = code_lines[1] if len(code_lines) > 1 else code_lines[0]
                 language_label = html.escape(language.upper() or "CODE")
                 rendered_code = (
-                    '<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#050d0c" '
-                    'border="1" bordercolor="#254239"><tr><td style="padding:8px 12px;">'
-                    f'<div style="color:#69d9a8;font-size:9px;">{language_label} / CODE BLOCK</div>'
-                    f'<pre style="color:#d8eee3;font-family:monospace;white-space:pre-wrap;">'
+                    '<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#030e20" '
+                    'border="1" bordercolor="#1b4b7a" style="border-radius:6px;"><tr><td style="padding:10px 14px;">'
+                    f'<div style="color:#58d8d0;font-size:9px;font-family:monospace;font-weight:bold;">{language_label} / CODE BLOCK</div>'
+                    f'<pre style="color:#eaf7f5;font-family:monospace;white-space:pre-wrap;margin:6px 0 0 0;">'
                     f'{html.escape(code)}</pre></td></tr></table>'
                 )
             else:
                 rendered_code = (
-                    '<code style="color:#9ee7bf;background-color:#13261f;">'
+                    '<code style="color:#57fabc;background-color:#071a34;border:1px solid #153c64;border-radius:4px;padding:1px 5px;font-family:monospace;">'
                     f'{html.escape(token[1:-1])}</code>'
                 )
             code_fragments.append((placeholder, rendered_code))

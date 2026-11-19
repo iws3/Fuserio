@@ -97,6 +97,8 @@ def test_level_stream_subject_navigation_and_back(window):
 def test_startup_offers_levels_and_sidebar_links_switch_workspaces(window):
     from PySide6.QtWidgets import QLabel
 
+    assert window.content_stack.currentWidget() is window.desktop_page
+    window.open_gce_levels()
     assert window.content_stack.currentWidget() is window.level_page
     assert window.gce_study_button.text() == "GCE Learning"
     assert window.ai_workspace_button.text() == "AI Workspace"
@@ -615,6 +617,7 @@ def test_responsive_layouts_adapt_to_screen_dimensions(window):
     from PySide6.QtGui import QResizeEvent
     from PySide6.QtWidgets import QApplication, QBoxLayout
 
+    window.open_gce_levels()
     # Test narrow / mobile layout
     window.resize(720, 600)
     window.resizeEvent(QResizeEvent(QSize(720, 600), window.size()))
@@ -666,4 +669,33 @@ def test_chemistry_practical_detail_launches_interactive_titration(window):
     assert window.active_experiment is not None
     assert window.active_experiment.identifier == "titration"
     assert window.content_stack.currentWidget() is window.lab_detail_page
+
+
+def test_terminal_help_commands_and_subject_rendering(window):
+    # Verify terminal input prompt is present
+    assert window.terminal_prompt_lbl.text() == "fuserio@gce-os:~$"
+
+    # Test quick help command prefilling
+    window._on_quick_cmd_clicked("solve <eq>")
+    assert window.input.toPlainText() == "solve "
+
+    # Test quick help subject switching
+    window._on_quick_cmd_clicked("chemistry")
+    assert window.gce_subject == "Chemistry"
+    assert "Chemistry" in window.input.toPlainText()
+
+    # Test subject-specific terminal rendering
+    window.messages = [
+        {"role": "user", "content": "explain titration and indicators"},
+        {"role": "assistant", "content": "Titration is volumetric analysis.", "streaming": False}
+    ]
+    window._render_messages()
+    html = window.chat_view.toHtml()
+    assert "CHEMISTRY" in html
+    assert "GCE CAMEROON · EXPERIMENTAL CHEMISTRY" in html
+
+    # Test clear command
+    window._on_quick_cmd_clicked("clear")
+    assert len(window.messages) == 0
+
 

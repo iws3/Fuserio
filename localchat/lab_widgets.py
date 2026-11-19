@@ -8,13 +8,13 @@ from localchat.lab_data import Experiment
 from localchat.titration import INDICATORS, TITRATION_FLAVORS, flavor_by_id, indicator_color, titration_ph
 
 
-BACKGROUND = QColor("#06120f")
-GRID = QColor("#17342b")
-MINT = QColor("#68efb2")
+BACKGROUND = QColor("#030e20")
+GRID = QColor("#0c264a")
+MINT = QColor("#57fabc")
 CYAN = QColor("#58d8d0")
 AMBER = QColor("#ffbc74")
 TEXT = QColor("#e8f7ef")
-MUTED = QColor("#79968a")
+MUTED = QColor("#7ea5c4")
 PINK = QColor("#ff7186")
 
 
@@ -610,7 +610,7 @@ class LabCanvas(QWidget):
         painter.setFont(QFont("monospace", 9, QFont.Bold))
         status = "● LIVE MODEL" if self.running else "Ⅱ PAUSED"
         painter.drawText(18, 24, status)
-        painter.setPen(QColor("#527366"))
+        painter.setPen(MUTED)
         painter.drawText(bounds.width() - 115, 24, f"SIM  {self.elapsed:05.1f}s")
 
     @staticmethod
@@ -633,7 +633,7 @@ class LabCanvas(QWidget):
         scale_y = (bounds.height() - 100) / max(max_height * 1.4, 1)
         ground = bounds.height() - 48
         origin = QPointF(48, ground)
-        painter.setPen(QPen(QColor("#44685a"), 2))
+        painter.setPen(QPen(QColor("#1b4b7a"), 2))
         painter.drawLine(28, ground, bounds.width() - 24, ground)
         path = QPainterPath(origin)
         for sample in range(1, 41):
@@ -641,7 +641,7 @@ class LabCanvas(QWidget):
             sample_x = speed * math.cos(angle) * sample_t
             sample_y = speed * math.sin(angle) * sample_t - 0.5 * gravity * sample_t**2
             path.lineTo(origin.x() + sample_x * scale_x, ground - sample_y * scale_y)
-        painter.setPen(QPen(QColor("#326b58"), 2, Qt.DashLine))
+        painter.setPen(QPen(QColor("#2d6bb3"), 2, Qt.DashLine))
         painter.drawPath(path)
         ball = QPointF(origin.x() + x * scale_x, ground - max(0, y) * scale_y)
         painter.setPen(Qt.NoPen)
@@ -658,15 +658,15 @@ class LabCanvas(QWidget):
         pivot = QPointF(bounds.width() * 0.5, 65)
         scale = min(bounds.height() - 130, 180) / 1.8
         bob = QPointF(pivot.x() + math.sin(angle) * length / 100 * scale, pivot.y() + math.cos(angle) * length / 100 * scale)
-        painter.setPen(QPen(QColor("#527767"), 2))
+        painter.setPen(QPen(QColor("#3a6698"), 2))
         painter.drawLine(pivot, bob)
         painter.setPen(Qt.NoPen)
         painter.setBrush(AMBER)
         painter.drawEllipse(bob, 18, 18)
-        painter.setBrush(QColor("#baf3d4"))
+        painter.setBrush(QColor("#58d8d0"))
         painter.drawEllipse(pivot, 5, 5)
         arc = QRectF(pivot.x() - 100, pivot.y() - 8, 200, 200)
-        painter.setPen(QPen(QColor("#315443"), 1, Qt.DashLine))
+        painter.setPen(QPen(QColor("#1b4b7a"), 1, Qt.DashLine))
         painter.drawArc(arc, 205 * 16, 130 * 16)
         self._caption(painter, "OSCILLATION · SMALL-ANGLE MODEL", 24, bounds.height() - 20)
 
@@ -718,8 +718,8 @@ class LabCanvas(QWidget):
         top, bottom = 65, bounds.height() - 50
         painter.setPen(QPen(CYAN, 3, Qt.DashLine))
         painter.drawLine(middle, top, middle, bottom)
-        painter.setPen(QPen(QColor("#527767"), 1))
-        painter.setBrush(QColor("#0d241c"))
+        painter.setPen(QPen(QColor("#1b4b7a"), 1))
+        painter.setBrush(QColor("#061a34"))
         painter.drawRoundedRect(QRectF(25, top, middle - 35, bottom - top), 8, 8)
         painter.drawRoundedRect(QRectF(middle + 10, top, middle - 35, bottom - top), 8, 8)
         concentration = self.parameters.get("gradient", 70)
@@ -744,7 +744,7 @@ class LabCanvas(QWidget):
         self._draw_reaction_particles(painter, bounds, activity / 100, self.parameters.get("enzyme", 5))
         baseline = bounds.height() - 44
         chart = QRectF(24, bounds.height() - 112, bounds.width() - 48, 56)
-        painter.setPen(QPen(QColor("#395347"), 1))
+        painter.setPen(QPen(QColor("#1b4b7a"), 1))
         painter.drawRect(chart)
         path = QPainterPath(QPointF(chart.left(), chart.bottom()))
         for sample in range(1, 41):
@@ -780,13 +780,13 @@ class LabCanvas(QWidget):
         align: str = "left",
     ):
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#57fabc"))
+        painter.setBrush(QColor("#58d8d0"))
         painter.drawEllipse(target, 2.5, 2.5)
-        painter.setPen(QPen(QColor(87, 250, 188, 130), 1))
+        painter.setPen(QPen(QColor(88, 216, 208, 130), 1))
         painter.setBrush(Qt.NoBrush)
         painter.drawEllipse(target, 5.0, 5.0)
 
-        leader_pen = QPen(QColor(87, 250, 188, 160), 1.0, Qt.DashLine)
+        leader_pen = QPen(QColor(88, 216, 208, 160), 1.0, Qt.DashLine)
         painter.setPen(leader_pen)
         path = QPainterPath()
         path.moveTo(target)
@@ -810,8 +810,8 @@ class LabCanvas(QWidget):
         by = label_pos.y() - th / 2
         badge = QRectF(bx, by, tw, th)
 
-        painter.setPen(QPen(QColor(87, 250, 188, 190), 1))
-        painter.setBrush(QColor(7, 28, 23, 235))
+        painter.setPen(QPen(QColor(88, 216, 208, 190), 1))
+        painter.setBrush(QColor(6, 26, 52, 235))
         painter.drawRoundedRect(badge, 4, 4)
 
         painter.setPen(QColor("#ffffff"))
@@ -832,13 +832,13 @@ class LabCanvas(QWidget):
 
         # --- 1. Lab Bench Surface ---
         bench_grad = QLinearGradient(0, bench_y, 0, H)
-        bench_grad.setColorAt(0, QColor("#132924"))
-        bench_grad.setColorAt(0.2, QColor("#0d1d19"))
-        bench_grad.setColorAt(1, QColor("#060e0c"))
+        bench_grad.setColorAt(0, QColor("#0c264a"))
+        bench_grad.setColorAt(0.2, QColor("#071a36"))
+        bench_grad.setColorAt(1, QColor("#020b18"))
         painter.fillRect(QRectF(0, bench_y, W, H - bench_y), bench_grad)
-        painter.setPen(QPen(QColor("#275347"), 2))
+        painter.setPen(QPen(QColor("#1b4b7a"), 2))
         painter.drawLine(QPointF(0, bench_y), QPointF(W, bench_y))
-        painter.setPen(QPen(QColor(104, 239, 178, 40), 1))
+        painter.setPen(QPen(QColor(88, 216, 208, 60), 1))
         painter.drawLine(QPointF(0, bench_y + 2), QPointF(W, bench_y + 2))
 
         # --- 2. Reaction Conical Flask (Left Side) ---
@@ -1021,20 +1021,20 @@ class LabCanvas(QWidget):
         hud_rect = QRectF(hud_x, hud_y, hud_w, hud_h)
 
         h_grad = QLinearGradient(hud_x, hud_y, hud_x, hud_y + hud_h)
-        h_grad.setColorAt(0, QColor("#102521"))
-        h_grad.setColorAt(0.5, QColor("#0a1815"))
-        h_grad.setColorAt(1, QColor("#06100e"))
+        h_grad.setColorAt(0, QColor("#081d38"))
+        h_grad.setColorAt(0.5, QColor("#05152a"))
+        h_grad.setColorAt(1, QColor("#020b18"))
         painter.setBrush(h_grad)
-        painter.setPen(QPen(QColor("#244a3f"), 1.5))
+        painter.setPen(QPen(QColor("#1b4b7a"), 1.5))
         painter.drawRoundedRect(hud_rect, 10, 10)
 
         painter.setFont(QFont("monospace", 8, QFont.Bold))
-        painter.setPen(QColor("#68efb2"))
+        painter.setPen(QColor("#58d8d0"))
         painter.drawText(int(hud_x + 12), int(hud_y + 18), "GAS EVOLUTION MONITOR")
 
         lcd_rect = QRectF(hud_x + 10, hud_y + 26, hud_w - 20, 36)
-        painter.setBrush(QColor("#030c0a"))
-        painter.setPen(QPen(QColor("#16382f"), 1.2))
+        painter.setBrush(QColor("#020b18"))
+        painter.setPen(QPen(QColor("#0e2e50"), 1.2))
         painter.drawRoundedRect(lcd_rect, 5, 5)
 
         painter.setFont(QFont("monospace", 17, QFont.Bold))
@@ -1099,13 +1099,13 @@ class LabCanvas(QWidget):
 
         # --- 1. Lab Bench Surface ---
         bench_grad = QLinearGradient(0, bench_y, 0, H)
-        bench_grad.setColorAt(0, QColor("#132924"))
-        bench_grad.setColorAt(0.2, QColor("#0d1d19"))
-        bench_grad.setColorAt(1, QColor("#060e0c"))
+        bench_grad.setColorAt(0, QColor("#0c264a"))
+        bench_grad.setColorAt(0.2, QColor("#071a36"))
+        bench_grad.setColorAt(1, QColor("#020b18"))
         painter.fillRect(QRectF(0, bench_y, W, H - bench_y), bench_grad)
-        painter.setPen(QPen(QColor("#275347"), 2))
+        painter.setPen(QPen(QColor("#1b4b7a"), 2))
         painter.drawLine(QPointF(0, bench_y), QPointF(W, bench_y))
-        painter.setPen(QPen(QColor(104, 239, 178, 40), 1))
+        painter.setPen(QPen(QColor(88, 216, 208, 60), 1))
         painter.drawLine(QPointF(0, bench_y + 2), QPointF(W, bench_y + 2))
 
         # --- 2. Retort Stand Base & Vertical Steel Rod ---
@@ -1115,15 +1115,15 @@ class LabCanvas(QWidget):
         stand_h = 12
         stand_rect = QRectF(stand_left, bench_y - stand_h, stand_w, stand_h)
         base_grad = QLinearGradient(stand_left, stand_rect.top(), stand_left, stand_rect.bottom())
-        base_grad.setColorAt(0, QColor("#2b443c"))
-        base_grad.setColorAt(0.4, QColor("#1b2c27"))
-        base_grad.setColorAt(1, QColor("#0c1513"))
-        painter.setPen(QPen(QColor("#3d5e53"), 1))
+        base_grad.setColorAt(0, QColor("#18385c"))
+        base_grad.setColorAt(0.4, QColor("#0f2642"))
+        base_grad.setColorAt(1, QColor("#061224"))
+        painter.setPen(QPen(QColor("#27588c"), 1))
         painter.setBrush(base_grad)
         painter.drawRoundedRect(stand_rect, 3, 3)
         # Rubber foot pads
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#080f0d"))
+        painter.setBrush(QColor("#030a14"))
         painter.drawRect(QRectF(stand_left + 8, bench_y, 14, 2))
         painter.drawRect(QRectF(stand_left + stand_w - 22, bench_y, 14, 2))
 
@@ -1133,15 +1133,15 @@ class LabCanvas(QWidget):
         rod_w = 7
         rod_rect = QRectF(rod_x - rod_w / 2, rod_top_y, rod_w, (bench_y - stand_h) - rod_top_y)
         rod_grad = QLinearGradient(rod_rect.left(), 0, rod_rect.right(), 0)
-        rod_grad.setColorAt(0.0, QColor("#49665d"))
-        rod_grad.setColorAt(0.25, QColor("#d3e6df"))
-        rod_grad.setColorAt(0.65, QColor("#8faea4"))
-        rod_grad.setColorAt(1.0, QColor("#364b44"))
+        rod_grad.setColorAt(0.0, QColor("#3a567a"))
+        rod_grad.setColorAt(0.25, QColor("#d3e4f6"))
+        rod_grad.setColorAt(0.65, QColor("#7ea0c6"))
+        rod_grad.setColorAt(1.0, QColor("#283e58"))
         painter.setPen(Qt.NoPen)
         painter.setBrush(rod_grad)
         painter.drawRoundedRect(rod_rect, 2, 2)
         # Rod top metallic dome cap
-        painter.setBrush(QColor("#c5ded5"))
+        painter.setBrush(QColor("#c5d8ee"))
         painter.drawEllipse(QPointF(rod_x, rod_top_y), 4, 3)
 
         # --- 3. White Ceramic Contrast Tile ---
@@ -1461,14 +1461,14 @@ class LabCanvas(QWidget):
         meter_rect = QRectF(meter_x, meter_y, meter_w, meter_h)
 
         m_grad = QLinearGradient(meter_x, meter_y, meter_x, meter_y + meter_h)
-        m_grad.setColorAt(0, QColor("#102521"))
-        m_grad.setColorAt(0.5, QColor("#0a1815"))
-        m_grad.setColorAt(1, QColor("#06100e"))
+        m_grad.setColorAt(0, QColor("#081d38"))
+        m_grad.setColorAt(0.5, QColor("#05152a"))
+        m_grad.setColorAt(1, QColor("#020b18"))
         painter.setBrush(m_grad)
-        painter.setPen(QPen(QColor("#244a3f"), 1.5))
+        painter.setPen(QPen(QColor("#1b4b7a"), 1.5))
         painter.drawRoundedRect(meter_rect, 10, 10)
 
-        painter.setPen(QPen(QColor(104, 239, 178, 50), 1))
+        painter.setPen(QPen(QColor(88, 216, 208, 60), 1))
         painter.drawRoundedRect(meter_rect.adjusted(1, 1, -1, -1), 9, 9)
 
         t_font = QFont()
@@ -1483,8 +1483,8 @@ class LabCanvas(QWidget):
         painter.drawEllipse(QPointF(meter_x + meter_w - 14, meter_y + 14), 3, 3)
 
         lcd_rect = QRectF(meter_x + 10, meter_y + 26, meter_w - 20, 68)
-        painter.setBrush(QColor("#040d0b"))
-        painter.setPen(QPen(QColor("#16352c"), 1.2))
+        painter.setBrush(QColor("#020b18"))
+        painter.setPen(QPen(QColor("#0e2e50"), 1.2))
         painter.drawRoundedRect(lcd_rect, 6, 6)
 
         lcd_font = QFont("Monospace")
@@ -1683,13 +1683,13 @@ class LabCanvas(QWidget):
 
         # --- 1. Lab Bench Surface ---
         bench_grad = QLinearGradient(0, bench_y, 0, H)
-        bench_grad.setColorAt(0, QColor("#132924"))
-        bench_grad.setColorAt(0.2, QColor("#0d1d19"))
-        bench_grad.setColorAt(1, QColor("#060e0c"))
+        bench_grad.setColorAt(0, QColor("#0c264a"))
+        bench_grad.setColorAt(0.2, QColor("#071a36"))
+        bench_grad.setColorAt(1, QColor("#020b18"))
         painter.fillRect(QRectF(0, bench_y, W, H - bench_y), bench_grad)
-        painter.setPen(QPen(QColor("#275347"), 2))
+        painter.setPen(QPen(QColor("#1b4b7a"), 2))
         painter.drawLine(QPointF(0, bench_y), QPointF(W, bench_y))
-        painter.setPen(QPen(QColor(104, 239, 178, 40), 1))
+        painter.setPen(QPen(QColor(88, 216, 208, 60), 1))
         painter.drawLine(QPointF(0, bench_y + 2), QPointF(W, bench_y + 2))
 
         # --- 2. Iron Tripod Stand & Wire Gauze ---
@@ -1698,19 +1698,19 @@ class LabCanvas(QWidget):
         gauze_w = 110
 
         # Tripod legs (cast iron splayed tubular legs with rubber feet)
-        painter.setPen(QPen(QColor("#3d564e"), 3))
+        painter.setPen(QPen(QColor("#27588c"), 3))
         painter.drawLine(QPointF(cx - gauze_w * 0.42, gauze_y), QPointF(cx - gauze_w * 0.58, bench_y))
         painter.drawLine(QPointF(cx, gauze_y), QPointF(cx + 8, bench_y - 12))
         painter.drawLine(QPointF(cx + gauze_w * 0.42, gauze_y), QPointF(cx + gauze_w * 0.58, bench_y))
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor("#0d1714"))
+        painter.setBrush(QColor("#04101e"))
         painter.drawRect(QRectF(cx - gauze_w * 0.58 - 4, bench_y - 3, 8, 3))
         painter.drawRect(QRectF(cx + gauze_w * 0.58 - 4, bench_y - 3, 8, 3))
 
         # Circular Iron Tripod Ring Top
         ring_rect = QRectF(cx - gauze_w / 2, gauze_y - 3, gauze_w, 6)
-        painter.setBrush(QColor("#273d36"))
-        painter.setPen(QPen(QColor("#48665b"), 1))
+        painter.setBrush(QColor("#18385c"))
+        painter.setPen(QPen(QColor("#2d6bb3"), 1))
         painter.drawRoundedRect(ring_rect, 2, 2)
 
         # Ceramic Wire Gauze (metallic mesh with central white ceramic refractory patch)
@@ -1882,20 +1882,20 @@ class LabCanvas(QWidget):
         hud_rect = QRectF(hud_x, hud_y, hud_w, hud_h)
 
         h_grad = QLinearGradient(hud_x, hud_y, hud_x, hud_y + hud_h)
-        h_grad.setColorAt(0, QColor("#102521"))
-        h_grad.setColorAt(0.5, QColor("#0a1815"))
-        h_grad.setColorAt(1, QColor("#06100e"))
+        h_grad.setColorAt(0, QColor("#081d38"))
+        h_grad.setColorAt(0.5, QColor("#05152a"))
+        h_grad.setColorAt(1, QColor("#020b18"))
         painter.setBrush(h_grad)
-        painter.setPen(QPen(QColor("#244a3f"), 1.5))
+        painter.setPen(QPen(QColor("#1b4b7a"), 1.5))
         painter.drawRoundedRect(hud_rect, 10, 10)
 
         painter.setFont(QFont("monospace", 8, QFont.Bold))
-        painter.setPen(QColor("#68efb2"))
+        painter.setPen(QColor("#58d8d0"))
         painter.drawText(int(hud_x + 12), int(hud_y + 18), "SOLUBILITY ANALYSER")
 
         lcd_rect = QRectF(hud_x + 10, hud_y + 26, hud_w - 20, 36)
-        painter.setBrush(QColor("#030c0a"))
-        painter.setPen(QPen(QColor("#16382f"), 1.2))
+        painter.setBrush(QColor("#020b18"))
+        painter.setPen(QPen(QColor("#0e2e50"), 1.2))
         painter.drawRoundedRect(lcd_rect, 5, 5)
 
         painter.setFont(QFont("monospace", 17, QFont.Bold))
@@ -1956,13 +1956,13 @@ class LabCanvas(QWidget):
 
         # --- 1. Lab Bench Surface ---
         bench_grad = QLinearGradient(0, bench_y, 0, H)
-        bench_grad.setColorAt(0, QColor("#132924"))
-        bench_grad.setColorAt(0.2, QColor("#0d1d19"))
-        bench_grad.setColorAt(1, QColor("#060e0c"))
+        bench_grad.setColorAt(0, QColor("#0c264a"))
+        bench_grad.setColorAt(0.2, QColor("#071a36"))
+        bench_grad.setColorAt(1, QColor("#020b18"))
         painter.fillRect(QRectF(0, bench_y, W, H - bench_y), bench_grad)
-        painter.setPen(QPen(QColor("#275347"), 2))
+        painter.setPen(QPen(QColor("#1b4b7a"), 2))
         painter.drawLine(QPointF(0, bench_y), QPointF(W, bench_y))
-        painter.setPen(QPen(QColor(104, 239, 178, 40), 1))
+        painter.setPen(QPen(QColor(88, 216, 208, 60), 1))
         painter.drawLine(QPointF(0, bench_y + 2), QPointF(W, bench_y + 2))
 
         # --- 2. Retort Stand & Ring Clamp ---
@@ -1970,24 +1970,24 @@ class LabCanvas(QWidget):
         stand_left = cx - 80
         stand_w = 120
         stand_rect = QRectF(stand_left, bench_y - 12, stand_w, 12)
-        painter.setBrush(QColor("#1f332c"))
-        painter.setPen(QPen(QColor("#3d564e"), 1))
+        painter.setBrush(QColor("#18385c"))
+        painter.setPen(QPen(QColor("#27588c"), 1))
         painter.drawRoundedRect(stand_rect, 2, 2)
 
         rod_x = stand_left + 16
         rod_rect = QRectF(rod_x - 3.5, 24, 7, bench_y - 12 - 24)
         rod_grad = QLinearGradient(rod_rect.left(), 0, rod_rect.right(), 0)
-        rod_grad.setColorAt(0.0, QColor("#49665d"))
-        rod_grad.setColorAt(0.3, QColor("#d3e6df"))
-        rod_grad.setColorAt(0.7, QColor("#8faea4"))
-        rod_grad.setColorAt(1.0, QColor("#364b44"))
+        rod_grad.setColorAt(0.0, QColor("#3a567a"))
+        rod_grad.setColorAt(0.3, QColor("#d3e4f6"))
+        rod_grad.setColorAt(0.7, QColor("#7ea0c6"))
+        rod_grad.setColorAt(1.0, QColor("#283e58"))
         painter.setPen(Qt.NoPen)
         painter.setBrush(rod_grad)
         painter.drawRoundedRect(rod_rect, 2, 2)
 
         clamp_y = 110
-        painter.setBrush(QColor("#274037"))
-        painter.setPen(QPen(QColor("#44695c"), 1))
+        painter.setBrush(QColor("#18385c"))
+        painter.setPen(QPen(QColor("#2d6bb3"), 1))
         painter.drawRoundedRect(QRectF(rod_x - 5, clamp_y - 6, 10, 12), 2, 2)
         painter.setPen(QPen(QColor("#a88636"), 2.5))
         painter.drawLine(QPointF(rod_x + 5, clamp_y), QPointF(cx - 36, clamp_y))
@@ -2136,20 +2136,20 @@ class LabCanvas(QWidget):
         hud_rect = QRectF(hud_x, hud_y, hud_w, hud_h)
 
         h_grad = QLinearGradient(hud_x, hud_y, hud_x, hud_y + hud_h)
-        h_grad.setColorAt(0, QColor("#102521"))
-        h_grad.setColorAt(0.5, QColor("#0a1815"))
-        h_grad.setColorAt(1, QColor("#06100e"))
+        h_grad.setColorAt(0, QColor("#081d38"))
+        h_grad.setColorAt(0.5, QColor("#05152a"))
+        h_grad.setColorAt(1, QColor("#020b18"))
         painter.setBrush(h_grad)
-        painter.setPen(QPen(QColor("#244a3f"), 1.5))
+        painter.setPen(QPen(QColor("#1b4b7a"), 1.5))
         painter.drawRoundedRect(hud_rect, 10, 10)
 
         painter.setFont(QFont("monospace", 8, QFont.Bold))
-        painter.setPen(QColor("#68efb2"))
+        painter.setPen(QColor("#58d8d0"))
         painter.drawText(int(hud_x + 12), int(hud_y + 18), "GRAVIMETRIC YIELD HUD")
 
         lcd_rect = QRectF(hud_x + 10, hud_y + 26, hud_w - 20, 36)
-        painter.setBrush(QColor("#030c0a"))
-        painter.setPen(QPen(QColor("#16382f"), 1.2))
+        painter.setBrush(QColor("#020b18"))
+        painter.setPen(QPen(QColor("#0e2e50"), 1.2))
         painter.drawRoundedRect(lcd_rect, 5, 5)
 
         painter.setFont(QFont("monospace", 17, QFont.Bold))

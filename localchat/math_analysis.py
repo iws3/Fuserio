@@ -196,26 +196,26 @@ def analyse_xy_data(text: str) -> AnalysisResult:
 
 
 def _make_plot(x_values: np.ndarray, y_values: np.ndarray, source: str) -> bytes:
-    figure = Figure(figsize=(7.2, 4.5), dpi=120, facecolor="#071512", tight_layout=True)
+    figure = Figure(figsize=(7.2, 4.5), dpi=120, facecolor="#030e20", tight_layout=True)
     canvas = FigureCanvasAgg(figure)
     axes = figure.add_subplot(111)
-    axes.set_facecolor("#0b201a")
-    axes.tick_params(colors="#b3d4c5", labelsize=9)
+    axes.set_facecolor("#06162d")
+    axes.tick_params(colors="#89b6d8", labelsize=9)
     for spine in axes.spines.values():
-        spine.set_color("#416456")
-    axes.grid(color="#25483b", linewidth=0.7, alpha=0.8)
-    axes.set_xlabel("x", color="#d9f3e5")
-    axes.set_ylabel("y", color="#d9f3e5")
-    axes.set_title(source[:64], color="#8ef0c2", loc="left", fontsize=12, pad=12)
+        spine.set_color("#18426d")
+    axes.grid(color="#0e2a4f", linewidth=0.7, alpha=0.7)
+    axes.set_xlabel("x", color="#d8efff", fontsize=10, labelpad=6)
+    axes.set_ylabel("y", color="#d8efff", fontsize=10, labelpad=6)
+    axes.set_title(source[:64], color="#57fabc", loc="left", fontsize=12, pad=12, weight="bold")
     order = np.argsort(x_values)
     sorted_x = x_values[order]
     sorted_y = y_values[order]
-    axes.plot(sorted_x, sorted_y, color="#55d9bd", linewidth=2.2, label="Data / function")
-    axes.scatter(x_values, y_values, color="#ffc478", edgecolors="#fff0c8", linewidths=0.5, s=22, zorder=3)
+    axes.plot(sorted_x, sorted_y, color="#00e5ff", linewidth=2.4, label="Data / function")
+    axes.scatter(x_values, y_values, color="#ffb84d", edgecolors="#ffffff", linewidths=0.6, s=24, zorder=3)
     if source == "Measured data":
         slope, intercept = np.polyfit(x_values, y_values, 1)
-        axes.plot(sorted_x, slope * sorted_x + intercept, color="#ff8294", linewidth=1.6, linestyle="--", label="Linear fit")
-        axes.legend(facecolor="#10251f", edgecolor="#355d4d", labelcolor="#d8eee2", fontsize=8)
+        axes.plot(sorted_x, slope * sorted_x + intercept, color="#ff5983", linewidth=1.8, linestyle="--", label="Linear fit")
+        axes.legend(facecolor="#061a35", edgecolor="#18426d", labelcolor="#d8efff", fontsize=8)
     output = io.BytesIO()
     canvas.print_png(output)
     return output.getvalue()
