@@ -3,9 +3,11 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QMimeData, QPointF, Qt
+from PySide6.QtGui import QDropEvent
 
 from localchat.lab_data import EXPERIMENTS, experiment_by_id
-from localchat.lab_widgets import LabCanvas
+from localchat.lab_widgets import EQUIPMENT_MIME_TYPE, LabCanvas
 
 
 def app():
@@ -169,6 +171,49 @@ def test_titration_interactive_actions_and_measurements():
     canvas.close()
 
 
+def test_titration_drag_drop_builds_and_unlocks_the_bench():
+    app()
+    canvas = LabCanvas()
+    canvas.resize(720, 480)
+    experiment = experiment_by_id("titration")
+    assert experiment is not None
+    canvas.set_experiment(experiment)
+
+    assert canvas.measurements()["MODEL pH"] == "--"
+    assert "SETUP REQUIRED" in canvas.measurements()["STATUS"]
+    assert not canvas.titration_action_ready("pipette_acid")
+
+    def drop_equipment(equipment_id, position):
+        mime_data = QMimeData()
+        mime_data.setData(EQUIPMENT_MIME_TYPE, equipment_id.encode("utf-8"))
+        event = QDropEvent(
+            QPointF(position),
+            Qt.DropAction.CopyAction,
+            mime_data,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        canvas.dropEvent(event)
+        assert event.isAccepted()
+
+    drop_equipment("flask", QPointF(180, 400))
+    drop_equipment("pipette", QPointF(270, 400))
+    assert canvas.titration_action_ready("pipette_acid")
+    canvas.titration_action("pipette_acid")
+    assert canvas.measurements()["MODEL pH"] != "--"
+
+    drop_equipment("indicator", QPointF(360, 400))
+    assert canvas.titration_action_ready("add_indicator")
+    canvas.titration_action("add_indicator")
+    drop_equipment("burette", QPointF(450, 400))
+    assert canvas.titration_action_ready("dropwise")
+
+    canvas.reset()
+    assert not canvas.titration_equipment
+    assert canvas.measurements()["MODEL pH"] == "--"
+    canvas.close()
+
+
 def test_titration_paints_apparatus_at_equivalence():
     app()
     canvas = LabCanvas()
@@ -176,6 +221,7 @@ def test_titration_paints_apparatus_at_equivalence():
     experiment = experiment_by_id("titration")
     assert experiment is not None
     canvas.set_experiment(experiment)
+    canvas.titration_action("pipette_acid")
     # Set to equivalence volume (25.0 mL)
     canvas.set_parameter("volume", 25)
     canvas.titration_action("dropwise")

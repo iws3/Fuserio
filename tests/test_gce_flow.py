@@ -643,22 +643,72 @@ def test_titration_workbench_integration_in_main_window(window):
     window.open_experiment("titration")
 
     assert window.active_experiment.identifier == "titration"
+    assert not window.lab_canvas.timer.isActive()
     assert "volume" in window.lab_parameter_sliders
     assert "volume" in window.lab_parameter_labels
+    assert not window.titration_action_buttons["pipette_acid"].isEnabled()
 
-    # Trigger dropwise titrant addition via UI action
-    window._titration_action("dropwise")
+    canvas = window.lab_canvas
+    canvas.place_titration_equipment("flask", canvas.rect().center())
+    canvas.place_titration_equipment("pipette", canvas.rect().center())
+    assert window.titration_action_buttons["pipette_acid"].isEnabled()
+    window.titration_action_buttons["pipette_acid"].click()
+
+    canvas.place_titration_equipment("indicator", canvas.rect().center())
+    window.titration_action_buttons["add_indicator"].click()
+    canvas.place_titration_equipment("burette", canvas.rect().center())
+    assert window.titration_action_buttons["dropwise"].isEnabled()
+
+    window.titration_action_buttons["dropwise"].click()
     assert window.lab_canvas.parameters["volume"] == 0.10
     assert window.lab_parameter_labels["volume"].text() == "0.1 mL"
 
-    # Trigger coarse addition
-    window._titration_action("add_1ml")
+    window.titration_action_buttons["add_1ml"].click()
     assert window.lab_canvas.parameters["volume"] == 1.10
     assert window.lab_parameter_labels["volume"].text() == "1.1 mL"
 
     # Verify metrics updated in the UI
     assert "TITRE" in window.lab_metric_labels
     assert window.lab_metric_labels["TITRE"].text() == "1.10 mL"
+
+
+def test_terminal_inspects_model_and_runs_read_only_agent_commands(window):
+    window.input.setPlainText("model inspect")
+    window.send_message()
+    model_report = window.messages[-1]["content"]
+    assert "model inspection" in model_report
+    assert "Q4_K_M" in model_report
+
+    window.input.setPlainText("/agent system")
+    window.send_message()
+    system_report = window.messages[-1]["content"]
+    assert "Local system" in system_report
+    assert "Physical memory" in system_report
+
+    window.input.setPlainText("/agent help")
+    window.send_message()
+    assert "/agent inspect model" in window.messages[-1]["content"]
+    assert not FakeChatWorker.instances
+
+
+def test_desktop_terminal_icon_opens_the_command_page(window):
+    window.open_desktop()
+    window.desktop_page._on_terminal_launched()
+
+    assert window.content_stack.currentWidget() is window.chat_page
+    assert window.active_workspace == "chat"
+
+
+def test_titration_tutor_uses_offline_guidance_without_model_server(window):
+    window.open_experiment("titration")
+    window.base_url = ""
+
+    window.ask_lab_tutor()
+
+    assert "Live simulation check" in window.lab_tutor_content
+    assert "MODEL pH: --" in window.lab_tutor_content
+    assert "STEP 1" in window.lab_tutor_content
+    assert not FakeChatWorker.instances
 
 
 def test_chemistry_practical_detail_launches_interactive_titration(window):
@@ -673,7 +723,7 @@ def test_chemistry_practical_detail_launches_interactive_titration(window):
 
 def test_terminal_help_commands_and_subject_rendering(window):
     # Verify terminal input prompt is present
-    assert window.terminal_prompt_lbl.text() == "fuserio@gce-os:~$"
+    assert window.terminal_prompt_lbl.text() == "❯"
 
     # Test quick help command prefilling
     window._on_quick_cmd_clicked("solve <eq>")

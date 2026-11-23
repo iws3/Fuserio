@@ -2,9 +2,11 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QMimeData, QPointF, Qt
+from PySide6.QtGui import QDropEvent
 from PySide6.QtWidgets import QApplication
 
+import localchat.app as app_module
 from localchat.app import MainWindow
 from localchat.os_desktop import OSDesktopView, SubjectFolderCard, GCEMasteryWidget, FloatingDock, SystemTrayWidget
 from localchat.os_header import OSHeader, SpotlightSearchBar
@@ -75,6 +77,35 @@ def test_subject_folder_cards_hover_and_click():
     desktop.close()
 
 
+def test_desktop_accepts_drags_and_reorders_folders_and_terminal_icon():
+    qt_app = app()
+    desktop = OSDesktopView()
+    desktop.resize(1440, 900)
+    desktop.show()
+    qt_app.processEvents()
+
+    def drop_icon(icon_key, position):
+        mime_data = QMimeData()
+        mime_data.setText(icon_key)
+        event = QDropEvent(
+            QPointF(position),
+            Qt.DropAction.MoveAction,
+            mime_data,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        desktop.dropEvent(event)
+        assert event.isAccepted()
+
+    drop_icon("terminal", QPointF(0, 0))
+    assert desktop.shelf_layout.itemAt(0).widget() is desktop.terminal_icon
+
+    chemistry = next(card for card in desktop.folder_cards if card.subject_key == "Chemistry")
+    drop_icon("Chemistry", QPointF(desktop.width(), desktop.height() / 2))
+    assert desktop.shelf_layout.itemAt(desktop.shelf_layout.count() - 1).widget() is chemistry
+    desktop.close()
+
+
 def test_floating_dock_and_sidebar_signals():
     app()
     desktop = OSDesktopView()
@@ -130,8 +161,11 @@ def test_os_header_spotlight_search_and_breadcrumbs():
     header.close()
 
 
-def test_main_window_os_desktop_integration():
+def test_main_window_os_desktop_integration(monkeypatch):
     app()
+    monkeypatch.setattr(app_module, "load_progress", lambda: {"selection": {}, "sessions": {}})
+    monkeypatch.setattr(app_module, "save_progress", lambda _progress: None)
+    monkeypatch.setattr(app_module.ExistingServerProbe, "start", lambda _self: None)
     window = MainWindow()
     window.resize(1440, 900)
 

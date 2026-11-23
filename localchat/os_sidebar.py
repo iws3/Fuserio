@@ -69,7 +69,7 @@ class OSSidebar(QFrame):
             ("desktop", "🏠", "Home / Desktop (Fuserio OS)"),
             ("gce", "⊞", "GCE Syllabus & Subjects"),
             ("lab", "📁", "Interactive Science Lab (Experiments)"),
-            ("chat", "🤖", "Fuserio Local AI Assistant (Offline Tutor)"),
+            ("chat", ">_", "Neural Terminal (Offline AI Tutor)"),
             ("math", "📊", "Math Data Lab (Plotter & Regression)"),
             ("settings", "⚙", "Settings & Local Models Manager"),
         ]
@@ -142,30 +142,36 @@ class OSSidebar(QFrame):
 
     def _update_styles(self):
         for key, btn in self.buttons.items():
+            font_family = "'JetBrains Mono', 'Fira Code', monospace" if key == "chat" else "sans-serif"
+            font_size = "15px" if key == "chat" else "18px"
             if key == self.current_screen:
-                btn.setStyleSheet("""
-                    QPushButton {
+                btn.setStyleSheet(f"""
+                    QPushButton {{
                         background: rgba(40, 160, 220, 200);
                         border: 1.5px solid #57fabc;
                         border-radius: 16px;
                         color: #ffffff;
-                        font-size: 18px;
-                    }
+                        font-family: {font_family};
+                        font-size: {font_size};
+                        font-weight: bold;
+                    }}
                 """)
             else:
-                btn.setStyleSheet("""
-                    QPushButton {
+                btn.setStyleSheet(f"""
+                    QPushButton {{
                         background: rgba(12, 38, 66, 110);
                         border: 1px solid rgba(88, 216, 208, 60);
                         border-radius: 16px;
                         color: #58d8d0;
-                        font-size: 18px;
-                    }
-                    QPushButton:hover {
+                        font-family: {font_family};
+                        font-size: {font_size};
+                        font-weight: bold;
+                    }}
+                    QPushButton:hover {{
                         background: rgba(40, 160, 220, 140);
                         border: 1px solid #58d8d0;
                         color: #ffffff;
-                    }
+                    }}
                 """)
 
     def _show_power_menu(self):

@@ -8,6 +8,8 @@ operating 100% offline without a local llama.cpp server running.
 import re
 from typing import Tuple
 
+from localchat.diagram_engine import PRESET_DIAGRAMS
+
 
 def generate_offline_gce_response(
     query: str, subject: str = "", level: str = ""
@@ -44,7 +46,9 @@ def generate_offline_gce_response(
             "2. **Apply Newton's Second Law ($F = m \\cdot a$):**\n"
             "   $$F = 1200\\text{ kg} \\times 3\\text{ m/s}^2 = \\mathbf{3600\\text{ N}}$$\n\n"
             "> **GCE Exam Tip:** Always write the formula first for 1 method mark, substitute with units, "
-            "and state the final answer with correct SI units."
+            "and state the final answer with correct SI units.\n\n"
+            "#### Newtonian Mechanics Architecture Flow:\n"
+            f"```dot\n{PRESET_DIAGRAMS['newton'].strip()}\n```"
         )
         return reasoning, content
 
@@ -64,7 +68,9 @@ def generate_offline_gce_response(
             "#### Quick GCE Check Question:\n"
             "If a $12\\text{ V}$ battery is connected across two resistors of $4\\,\\Omega$ and $6\\,\\Omega$ in series:\n"
             "$$R_{\\text{total}} = 4 + 6 = 10\\,\\Omega$$\n"
-            "$$I = \\frac{V}{R} = \\frac{12}{10} = \\mathbf{1.2\\text{ A}}$$"
+            "$$I = \\frac{V}{R} = \\frac{12}{10} = \\mathbf{1.2\\text{ A}}$$\n\n"
+            "#### Real-Time Circuit Architecture:\n"
+            f"```dot\n{PRESET_DIAGRAMS['circuits'].strip()}\n```"
         )
         return reasoning, content
 
@@ -79,7 +85,9 @@ def generate_offline_gce_response(
             "**Key Lab Observations:**\n"
             "1. Period $T$ is **independent** of the mass of the bob.\n"
             "2. Period $T$ is **independent** of small amplitude ($\theta < 10^\\circ$).\n"
-            "3. $T^2$ plotted against $L$ yields a straight line through the origin with slope $\\frac{4\\pi^2}{g}$."
+            "3. $T^2$ plotted against $L$ yields a straight line through the origin with slope $\\frac{4\\pi^2}{g}$.\n\n"
+            "#### SHM & Energy Conservation Flowchart:\n"
+            f"```dot\n{PRESET_DIAGRAMS['pendulum'].strip()}\n```"
         )
         return reasoning, content
 
@@ -103,7 +111,9 @@ def generate_offline_gce_response(
             "$$\\frac{\\sin i}{\\sin r} = n = \\frac{v_1}{v_2}$$\n\n"
             "* $i$ = Angle of incidence\n"
             "* $r$ = Angle of refraction\n"
-            "* $n$ = Refractive index of the second medium relative to the first"
+            "* $n$ = Refractive index of the second medium relative to the first\n\n"
+            "#### Optical Ray Path & Interface Diagram:\n"
+            f"```dot\n{PRESET_DIAGRAMS['refraction'].strip()}\n```"
         )
         return reasoning, content
 
@@ -123,7 +133,9 @@ def generate_offline_gce_response(
             "#### Pre-Lab Precautions:\n"
             "* Rinse the burette with the solution it is to contain before filling.\n"
             "* Ensure no air bubbles remain beneath the burette stopcock.\n"
-            "* Read the bottom of the meniscus at eye level."
+            "* Read the bottom of the meniscus at eye level.\n\n"
+            "#### Volumetric Analysis Workflow Architecture:\n"
+            f"```dot\n{PRESET_DIAGRAMS['titration'].strip()}\n```"
         )
         return reasoning, content
 
@@ -137,7 +149,9 @@ def generate_offline_gce_response(
             "1. **Concentration / Pressure:** Increases collision frequency.\n"
             "2. **Temperature:** Increases average kinetic energy; more particles exceed $E_a$.\n"
             "3. **Surface Area:** Exposes more active reactant sites.\n"
-            "4. **Catalyst:** Provides an alternative reaction pathway with lower activation energy."
+            "4. **Catalyst:** Provides an alternative reaction pathway with lower activation energy.\n\n"
+            "#### Reaction Kinetics & Activation Energy Diagram:\n"
+            f"```dot\n{PRESET_DIAGRAMS['reaction_rate'].strip()}\n```"
         )
         return reasoning, content
 
@@ -149,7 +163,9 @@ def generate_offline_gce_response(
             "* **All nitrates ($NO_3^-$)** and **Group 1 salts** are soluble.\n"
             "* **Chlorides ($Cl^-$)** are soluble *except* Silver ($AgCl$) and Lead ($PbCl_2$).\n"
             "* **Sulphates ($SO_4^{2-}$)** are soluble *except* Barium ($BaSO_4$), Lead ($PbSO_4$), and Calcium ($CaSO_4$).\n"
-            "* **Carbonates ($CO_3^{2-}$)** are insoluble *except* Sodium, Potassium, and Ammonium."
+            "* **Carbonates ($CO_3^{2-}$)** are insoluble *except* Sodium, Potassium, and Ammonium.\n\n"
+            "#### Insoluble Salts Preparation Flowchart:\n"
+            f"```dot\n{PRESET_DIAGRAMS['salts_prep'].strip()}\n```"
         )
         return reasoning, content
 
@@ -162,7 +178,9 @@ def generate_offline_gce_response(
             "$$6\\text{CO}_2 + 6\\text{H}_2\\text{O} \\xrightarrow[\\text{chlorophyll}]{\\text{sunlight}} \\text{C}_6\\text{H}_{12}\\text{O}_6 + 6\\text{O}_2$$\n\n"
             "**Two Major Stages:**\n"
             "1. **Light-Dependent Stage (Thylakoids):** Photolysis of water releases oxygen and produces ATP and NADPH.\n"
-            "2. **Light-Independent Stage / Calvin Cycle (Stroma):** Carbon fixation incorporates CO₂ into carbohydrates."
+            "2. **Light-Independent Stage / Calvin Cycle (Stroma):** Carbon fixation incorporates CO₂ into carbohydrates.\n\n"
+            "#### Photosynthesis Biochemical Pathways:\n"
+            f"```dot\n{PRESET_DIAGRAMS['photosynthesis'].strip()}\n```"
         )
         return reasoning, content
 
@@ -174,7 +192,9 @@ def generate_offline_gce_response(
             "* **Mitochondria:** Site of aerobic cellular respiration; synthesizes ATP ('powerhouse').\n"
             "* **Cell Membrane:** Phospholipid bilayer regulating selective permeability.\n"
             "* **Chloroplast (Plants only):** Site of photosynthesis containing chlorophyll thylakoids.\n"
-            "* **Cell Wall (Plants only):** Rigid cellulose structure providing mechanical support."
+            "* **Cell Wall (Plants only):** Rigid cellulose structure providing mechanical support.\n\n"
+            "#### Aerobic Cellular Respiration & ATP Synthesis Flowchart:\n"
+            f"```dot\n{PRESET_DIAGRAMS['respiration'].strip()}\n```"
         )
         return reasoning, content
 
@@ -189,7 +209,28 @@ def generate_offline_gce_response(
             "**The Discriminant ($\\Delta = b^2 - 4ac$):**\n"
             "* If $\\Delta > 0$: Two distinct real roots.\n"
             "* If $\\Delta = 0$: Two equal (repeated) real roots.\n"
-            "* If $\\Delta < 0$: No real roots (complex conjugates)."
+            "* If $\\Delta < 0$: No real roots (complex conjugates).\n\n"
+            "#### Quadratic Discriminant & Root Analysis Tree:\n"
+            f"```dot\n{PRESET_DIAGRAMS['quadratic'].strip()}\n```"
+        )
+        return reasoning, content
+
+    if any(k in q for k in ["trigonometr", "trig", "sohcahtoa", "sine", "cosine", "tangent", "unit circle", "pythagor"]):
+        content = (
+            "### Trigonometry & Circular Functions (Cameroon GCE Mathematics)\n\n"
+            "Trigonometry explores the relationships between the side lengths and interior angles of geometric triangles.\n\n"
+            "**Fundamental Ratios (Right-Angled Triangle):**\n"
+            "* **Sine:** $\\sin\\theta = \\frac{\\text{Opposite}}{\\text{Hypotenuse}}$\n"
+            "* **Cosine:** $\\cos\\theta = \\frac{\\text{Adjacent}}{\\text{Hypotenuse}}$\n"
+            "* **Tangent:** $\\tan\\theta = \\frac{\\text{Opposite}}{\\text{Adjacent}} = \\frac{\\sin\\theta}{\\cos\\theta}$\n\n"
+            "**Core Pythagorean Identity:**\n"
+            "$$\\sin^2\\theta + \\cos^2\\theta = 1$$\n\n"
+            "**Non-Right Triangle Laws:**\n"
+            "* **Sine Rule:** $\\frac{a}{\\sin A} = \\frac{b}{\\sin B} = \\frac{c}{\\sin C}$\n"
+            "* **Cosine Rule:** $c^2 = a^2 + b^2 - 2ab\\cos C$\n"
+            "* **Triangle Area:** $\\text{Area} = \\frac{1}{2}ab\\sin C$\n\n"
+            "#### Trigonometric Architecture & Function Map:\n"
+            f"```dot\n{PRESET_DIAGRAMS['trigonometry'].strip()}\n```"
         )
         return reasoning, content
 
@@ -202,7 +243,9 @@ def generate_offline_gce_response(
             "* Product: $(uv)' = u'v + uv'$\n"
             "* Quotient: $\\left(\\frac{u}{v}\\right)' = \\frac{u'v - uv'}{v^2}$\n\n"
             "**Indefinite Integration:**\n"
-            "$$\\int x^n \\, dx = \\frac{x^{n+1}}{n+1} + C \\quad (n \\neq -1)$$"
+            "$$\\int x^n \\, dx = \\frac{x^{n+1}}{n+1} + C \\quad (n \\neq -1)$$\n\n"
+            "#### Calculus & Rate of Change Architecture:\n"
+            f"```dot\n{PRESET_DIAGRAMS['calculus'].strip()}\n```"
         )
         return reasoning, content
 

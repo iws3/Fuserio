@@ -1,8 +1,8 @@
 import math
 
-from PySide6.QtCore import QPointF, QRectF, QTimer, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QMimeData, QPointF, QRectF, QTimer, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QDrag, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
 from localchat.lab_data import Experiment
 from localchat.titration import INDICATORS, TITRATION_FLAVORS, flavor_by_id, indicator_color, titration_ph
@@ -16,18 +16,60 @@ AMBER = QColor("#ffbc74")
 TEXT = QColor("#e8f7ef")
 MUTED = QColor("#7ea5c4")
 PINK = QColor("#ff7186")
+EQUIPMENT_MIME_TYPE = "application/x-fuserio-lab-equipment"
+TITRATION_EQUIPMENT = {
+    "flask": "CONICAL FLASK",
+    "pipette": "VOLUMETRIC PIPETTE",
+    "indicator": "INDICATOR",
+    "burette": "BURETTE",
+    "wash_bottle": "WASH BOTTLE",
+}
+
+
+class DraggableEquipmentButton(QPushButton):
+    def __init__(self, equipment_id: str, label: str, parent=None):
+        super().__init__(label, parent)
+        self.equipment_id = equipment_id
+        self._press_position = None
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self.setAccessibleName(f"Drag {label} onto the lab bench")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._press_position = event.position().toPoint()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (
+            self._press_position is None
+            or not event.buttons() & Qt.MouseButton.LeftButton
+            or (event.position().toPoint() - self._press_position).manhattanLength()
+            < QApplication.startDragDistance()
+        ):
+            super().mouseMoveEvent(event)
+            return
+
+        drag = QDrag(self)
+        mime_data = QMimeData()
+        mime_data.setData(EQUIPMENT_MIME_TYPE, self.equipment_id.encode("utf-8"))
+        drag.setMimeData(mime_data)
+        drag.exec(Qt.DropAction.CopyAction)
+        self._press_position = None
 
 
 class LabCanvas(QWidget):
     """Offline, deterministic 2D experiment visualizations built with Qt painting."""
 
     metrics_updated = Signal()
+    equipment_placed = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumSize(320, 300)
         self.setObjectName("labCanvas")
         self.setAccessibleName("Interactive science experiment simulation")
+        self.setAcceptDrops(True)
+        self.show_equipment_labels = True
         self.experiment: Experiment | None = None
         self.parameters: dict[str, int] = {}
         self.elapsed = 0.0
@@ -43,6 +85,9 @@ class LabCanvas(QWidget):
         self.titration_swirl_intensity: float = 0.0
         self.titration_transient_flash: float = 0.0
         self.titration_drop_progress: float = 0.0
+        self.titration_equipment: set[str] = set()
+        self.titration_equipment_positions: dict[str, tuple[float, float]] = {}
+        self._equipment_badges: dict[str, QLabel] = {}
 
         # Realistic Reaction Rate Laboratory State (Gas Syringe)
         self.reaction_gas_ml: float = 0.0
@@ -78,12 +123,13 @@ class LabCanvas(QWidget):
             self.parameters.update(parameters)
         if experiment.identifier == "titration":
             self.titration_analyte_ml = 25.0
-            self.titration_analyte_pipetted = True
-            self.titration_indicator_drops = 3
+            self.titration_analyte_pipetted = False
+            self.titration_indicator_drops = 0
             self.titration_water_wash_ml = 0.0
             self.titration_swirl_intensity = 0.0
             self.titration_transient_flash = 0.0
             self.titration_drop_progress = 0.0
+            self._clear_titration_equipment()
         elif experiment.identifier == "reaction-rate":
             self.reaction_gas_ml = 0.0
             self.reaction_rate_val = 0.0
@@ -140,6 +186,93 @@ class LabCanvas(QWidget):
         if key in self.parameters:
             self.parameters[key] = value
             self.update()
+
+    def _clear_titration_equipment(self):
+        self.titration_equipment.clear()
+        self.titration_equipment_positions.clear()
+        for badge in self._equipment_badges.values():
+            badge.deleteLater()
+        self._equipment_badges.clear()
+
+    def place_titration_equipment(self, equipment_id: str, position: QPointF):
+        if (
+            not self.experiment
+            or self.experiment.identifier != "titration"
+            or equipment_id not in TITRATION_EQUIPMENT
+        ):
+            return False
+
+        self.titration_equipment.add(equipment_id)
+        self.titration_equipment_positions[equipment_id] = (
+            max(0.0, min(1.0, position.x() / max(1, self.width()))),
+            max(0.0, min(1.0, position.y() / max(1, self.height()))),
+        )
+        badge = self._equipment_badges.get(equipment_id)
+        if badge is None:
+            badge = QLabel(TITRATION_EQUIPMENT[equipment_id], self)
+            badge.setStyleSheet(
+                "QLabel { color: #dffdf1; background: rgba(3, 18, 30, 225); "
+                "border: 1px solid #57fabc; border-radius: 5px; padding: 4px 7px; "
+                "font-size: 9px; font-weight: 700; }"
+            )
+            badge.adjustSize()
+            self._equipment_badges[equipment_id] = badge
+        self._position_equipment_badges()
+        badge.show()
+        self.equipment_placed.emit(equipment_id)
+        self.metrics_updated.emit()
+        self.update()
+        return True
+
+    def _position_equipment_badges(self):
+        for equipment_id, badge in self._equipment_badges.items():
+            x_ratio, y_ratio = self.titration_equipment_positions.get(equipment_id, (0.0, 0.0))
+            x = min(max(0, int(x_ratio * self.width())), max(0, self.width() - badge.width()))
+            y = min(max(0, int(y_ratio * self.height())), max(0, self.height() - badge.height()))
+            badge.move(x, y)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._position_equipment_badges()
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasFormat(EQUIPMENT_MIME_TYPE):
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasFormat(EQUIPMENT_MIME_TYPE):
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dropEvent(self, event):
+        if not event.mimeData().hasFormat(EQUIPMENT_MIME_TYPE):
+            event.ignore()
+            return
+        equipment_id = bytes(event.mimeData().data(EQUIPMENT_MIME_TYPE)).decode("utf-8")
+        if self.place_titration_equipment(equipment_id, event.position()):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def titration_action_ready(self, action: str) -> bool:
+        equipment = self.titration_equipment
+        sample_ready = self.titration_analyte_pipetted
+        if action == "pipette_acid":
+            return {"flask", "pipette"}.issubset(equipment)
+        if action == "add_indicator":
+            return sample_ready and {"flask", "indicator"}.issubset(equipment)
+        if action == "wash_water":
+            return sample_ready and {"flask", "wash_bottle"}.issubset(equipment)
+        if action == "fill_burette":
+            return "burette" in equipment
+        if action in {"dropwise", "add_half_ml", "add_1ml"}:
+            return sample_ready and self.titration_indicator_drops > 0 and "burette" in equipment
+        if action == "swirl":
+            return sample_ready and "flask" in equipment
+        return action == "reset"
 
     def play(self):
         if not self.experiment:
@@ -207,14 +340,18 @@ class LabCanvas(QWidget):
             self.titration_water_wash_ml = min(50.0, self.titration_water_wash_ml + 5.0)
         elif action == "reset":
             self.titration_analyte_ml = 25.0
-            self.titration_analyte_pipetted = True
-            self.titration_indicator_drops = 3
+            self.titration_analyte_pipetted = False
+            self.titration_indicator_drops = 0
             self.titration_water_wash_ml = 0.0
             self.titration_swirl_intensity = 0.0
             self.titration_transient_flash = 0.0
             self.titration_drop_progress = 0.0
             self.parameters["volume"] = 0
+            self._clear_titration_equipment()
             self.pause()
+        elif action in {"dropwise", "add_half_ml", "add_1ml", "swirl"}:
+            if not self.running:
+                self.timer.start()
         self.update()
         self.metrics_updated.emit()
 
@@ -312,13 +449,14 @@ class LabCanvas(QWidget):
         if self.experiment:
             if self.experiment.identifier == "titration":
                 self.titration_analyte_ml = 25.0
-                self.titration_analyte_pipetted = True
-                self.titration_indicator_drops = 3
+                self.titration_analyte_pipetted = False
+                self.titration_indicator_drops = 0
                 self.titration_water_wash_ml = 0.0
                 self.titration_swirl_intensity = 0.0
                 self.titration_transient_flash = 0.0
                 self.titration_drop_progress = 0.0
                 self.parameters["volume"] = 0
+                self._clear_titration_equipment()
             elif self.experiment.identifier == "reaction-rate":
                 self.reaction_gas_ml = 0.0
                 self.reaction_rate_val = 0.0
@@ -419,6 +557,15 @@ class LabCanvas(QWidget):
         self.update()
         if self._tick_counter % 3 == 0:
             self.metrics_updated.emit()
+        if (
+            not self.running
+            and self.experiment
+            and self.experiment.identifier == "titration"
+            and not self.titration_drop_progress
+            and not self.titration_swirl_intensity
+            and not self.titration_transient_flash
+        ):
+            self.timer.stop()
 
     def measurements(self) -> dict[str, str]:
         experiment_id = self.experiment.identifier if self.experiment else ""
@@ -534,13 +681,16 @@ class LabCanvas(QWidget):
             indicator = INDICATORS[p.get("indicator", 0)]
             acid_molarity = 0.1
             base_molarity = max(0.01, 0.1 * (p.get("concentration", 50) / 50.0))
-            analyte_vol = self.titration_analyte_ml if getattr(self, "titration_analyte_pipetted", True) else 0.001
-            ph = titration_ph(flavor, acid_molarity, max(0.1, analyte_vol), base_molarity, volume)
+            sample_ready = self.titration_analyte_pipetted
+            analyte_vol = self.titration_analyte_ml
+            ph = titration_ph(flavor, acid_molarity, analyte_vol, base_molarity, volume) if sample_ready else None
             equiv_vol = acid_molarity * analyte_vol / base_molarity
             drops = getattr(self, "titration_indicator_drops", 3)
             diff = volume - equiv_vol
 
-            if abs(diff) < 0.2:
+            if not sample_ready:
+                status = "SETUP REQUIRED · transfer analyte"
+            elif abs(diff) < 0.2:
                 status = "★ Equivalence (Neutral)"
             elif diff < -2.0:
                 status = "Acidic buffer region"
@@ -553,7 +703,7 @@ class LabCanvas(QWidget):
 
             return {
                 "VOLUME": f"{volume:.1f} mL",
-                "MODEL pH": f"{ph:.2f}",
+                "MODEL pH": f"{ph:.2f}" if ph is not None else "--",
                 "INDICATOR": f"{indicator} ({drops} drops)" if drops > 0 else f"{indicator} (0 drops)",
                 "TITRE": f"{volume:.2f} mL",
                 "EQUIVALENCE": f"{equiv_vol:.1f} mL",
@@ -1087,8 +1237,9 @@ class LabCanvas(QWidget):
         concentration = self.parameters.get("concentration", 50)
         acid_molarity = 0.1
         base_molarity = max(0.01, 0.1 * (concentration / 50.0))
-        analyte_vol = self.titration_analyte_ml if getattr(self, "titration_analyte_pipetted", True) else 0.001
-        ph = titration_ph(flavor, acid_molarity, max(0.1, analyte_vol), base_molarity, volume)
+        sample_ready = self.titration_analyte_pipetted
+        analyte_vol = self.titration_analyte_ml
+        ph = titration_ph(flavor, acid_molarity, analyte_vol, base_molarity, volume) if sample_ready else 7.0
         equiv_vol = acid_molarity * analyte_vol / base_molarity
         drops = getattr(self, "titration_indicator_drops", 3)
 
@@ -1224,9 +1375,9 @@ class LabCanvas(QWidget):
         flask_path.closeSubpath()
 
         # Solution Volume inside Conical Flask
-        v_in_flask = (analyte_vol if getattr(self, "titration_analyte_pipetted", True) else 0.0) + getattr(self, "titration_water_wash_ml", 0.0) + volume
+        v_in_flask = (analyte_vol if sample_ready else 0.0) + self.titration_water_wash_ml + volume
         fill_fraction = min(1.0, max(0.0, v_in_flask / 90.0))
-        fill_h = 16 + fill_fraction * (flask_h - neck_h - 22)
+        fill_h = 16 + fill_fraction * (flask_h - neck_h - 22) if sample_ready else 0
         surface_y = flask_bottom_y - fill_h
 
         # Compute width of conical flask at surface_y
@@ -1498,19 +1649,32 @@ class LabCanvas(QWidget):
         else:
             ph_glow = QColor("#58d8d0") if ph < 10.0 else QColor("#d08eff")
         painter.setPen(ph_glow)
-        painter.drawText(int(lcd_rect.left() + 10), int(lcd_rect.top() + 32), f"pH {ph:.2f}")
+        painter.drawText(
+            int(lcd_rect.left() + 10),
+            int(lcd_rect.top() + 32),
+            f"pH {ph:.2f}" if sample_ready else "pH --",
+        )
 
         sub_font = QFont("Monospace")
         sub_font.setPixelSize(9)
         painter.setFont(sub_font)
         painter.setPen(QColor("#7da598"))
         potential_mv = (7.0 - ph) * 59.16
-        painter.drawText(int(lcd_rect.left() + 10), int(lcd_rect.top() + 48), f"EMF {potential_mv:+.1f} mV")
+        painter.drawText(
+            int(lcd_rect.left() + 10),
+            int(lcd_rect.top() + 48),
+            f"EMF {potential_mv:+.1f} mV" if sample_ready else "TRANSFER SAMPLE",
+        )
         painter.drawText(int(lcd_rect.left() + 10), int(lcd_rect.top() + 61), "25.0 °C · ATC ON")
 
         status_rect = QRectF(meter_x + 10, meter_y + 102, meter_w - 20, 24)
         diff = volume - equiv_vol
-        if drops == 0:
+        if not sample_ready:
+            badge_color = QColor(255, 188, 116, 30)
+            badge_border = QColor("#ffbc74")
+            badge_text = "SETUP · NO SAMPLE"
+            badge_tcolor = QColor("#ffbc74")
+        elif drops == 0:
             badge_color = QColor(140, 160, 155, 30)
             badge_border = QColor("#8faea4")
             badge_text = "⚠ NO INDICATOR (CLEAR)"
@@ -1562,15 +1726,14 @@ class LabCanvas(QWidget):
         painter.setPen(QColor("#a4d1c3"))
         painter.drawText(bur_info_rect, Qt.AlignCenter, f"TITRE: {volume:.2f} mL  (Equiv: {equiv_vol:.1f} mL)")
 
-        # --- 8. Apparatus Equipment Labels ---
-        lbl_x = max(10.0, cx - 85)
-        self._draw_equipment_label(painter, "50.00 mL Burette", QPointF(bur_left, bur_top_y + 40), QPointF(lbl_x, bur_top_y + 40), "right")
-        self._draw_equipment_label(painter, "Retort Stand & Clamp", QPointF(rod_x, clamp_y1), QPointF(lbl_x, clamp_y1), "right")
-        self._draw_equipment_label(painter, "Stopcock Valve", QPointF(cx - 8, stopcock_y + 4), QPointF(lbl_x, stopcock_y + 4), "right")
-        self._draw_equipment_label(painter, "250 mL Conical Flask", QPointF(cx - base_w * 0.42, flask_top_y + flask_h * 0.65), QPointF(lbl_x, flask_top_y + flask_h * 0.65), "right")
-        self._draw_equipment_label(painter, "Porcelain Contrast Tile", QPointF(cx - tile_w * 0.42, tile_y + 3), QPointF(lbl_x, tile_y + 3), "right")
-        self._draw_equipment_label(painter, "pH Electrode Probe", QPointF(probe_tip.x(), probe_tip.y()), QPointF(cx + 42, probe_tip.y() - 10), "left")
-        self._draw_equipment_label(painter, "Digital pH Analyser", QPointF(meter_x, meter_y + 20), QPointF(meter_x - 12, meter_y + 20), "right")
+        if self.show_equipment_labels:
+            lbl_x = max(10.0, cx - 85)
+            self._draw_equipment_label(painter, "50.00 mL Burette", QPointF(bur_left, bur_top_y + 40), QPointF(lbl_x, bur_top_y + 40), "right")
+            self._draw_equipment_label(painter, "Retort Stand & Clamp", QPointF(rod_x, clamp_y1), QPointF(lbl_x, clamp_y1), "right")
+            self._draw_equipment_label(painter, "Stopcock Valve", QPointF(cx - 8, stopcock_y + 4), QPointF(lbl_x, stopcock_y + 4), "right")
+            self._draw_equipment_label(painter, "250 mL Conical Flask", QPointF(cx - base_w * 0.42, flask_top_y + flask_h * 0.65), QPointF(lbl_x, flask_top_y + flask_h * 0.65), "right")
+            self._draw_equipment_label(painter, "Porcelain Contrast Tile", QPointF(cx - tile_w * 0.42, tile_y + 3), QPointF(lbl_x, tile_y + 3), "right")
+            self._draw_equipment_label(painter, "pH Electrode Probe", QPointF(probe_tip.x(), probe_tip.y()), QPointF(cx + 42, probe_tip.y() - 10), "left")
 
         # --- 9. Top Apparatus Header & Indicator Callout ---
         self._caption(painter, "CLASS A PRECISION TITRATION APPARATUS", 18, 50, CYAN)

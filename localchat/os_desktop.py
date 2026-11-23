@@ -1,10 +1,11 @@
 import math
 import os
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QMimeData, QPoint, QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
+    QDrag,
     QFont,
     QIcon,
     QLinearGradient,
@@ -15,6 +16,7 @@ from PySide6.QtGui import (
     QRadialGradient,
 )
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -52,11 +54,15 @@ class SubjectFolderCard(QFrame):
         self.elevation_offset = 0
 
         self.setFixedSize(148, 172)
-        self.setCursor(Qt.PointingHandCursor)
+        self.setCursor(Qt.OpenHandCursor)
         self.setAccessibleName(f"Open {title} subject workspace")
 
         icon_path = os.path.join(SUBJECT_ASSETS, icon_filename)
         self.icon_pixmap = QPixmap(icon_path) if os.path.exists(icon_path) else QPixmap()
+
+        self._drag_origin = QPoint()
+        self._drag_started = False
+        self.setAcceptDrops(False)
 
     def enterEvent(self, event):
         self.hovered = True
@@ -72,8 +78,34 @@ class SubjectFolderCard(QFrame):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.clicked.emit(self.subject_key)
+            self._drag_origin = event.position().toPoint()
+            self._drag_started = False
+            self.setCursor(Qt.ClosedHandCursor)
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (
+            event.buttons() & Qt.LeftButton
+            and not self._drag_started
+            and (event.position().toPoint() - self._drag_origin).manhattanLength()
+            >= QApplication.startDragDistance()
+        ):
+            self._drag_started = True
+            drag = QDrag(self)
+            mime_data = QMimeData()
+            mime_data.setText(self.subject_key)
+            drag.setMimeData(mime_data)
+            drag.setPixmap(self.grab())
+            drag.setHotSpot(self._drag_origin)
+            drag.exec(Qt.MoveAction)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and not self._drag_started:
+            self.clicked.emit(self.subject_key)
+        self._drag_started = False
+        self.setCursor(Qt.OpenHandCursor)
+        super().mouseReleaseEvent(event)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -339,8 +371,8 @@ class FloatingDock(QFrame):
         self.btn_apps = self._create_dock_btn("⊞", "All GCE Apps & Syllabus", "gce")
         # Folders
         self.btn_folders = self._create_dock_btn("📁", "Subject Practicals & Labs", "lab")
-        # AI Robot
-        self.btn_ai = self._create_dock_btn("🤖", "Fuserio Local AI Assistant", "chat")
+        # AI Terminal
+        self.btn_ai = self._create_dock_btn(">_", "Terminal (Fuserio AI Tutor)", "chat")
         # Math & Data
         self.btn_math = self._create_dock_btn("📊", "Math Data Lab & Grapher", "math")
         # Settings
@@ -359,24 +391,27 @@ class FloatingDock(QFrame):
         btn.setFixedSize(36, 36)
         btn.setToolTip(tooltip)
         btn.setCursor(Qt.PointingHandCursor)
-        btn.setStyleSheet("""
-            QPushButton {
+        font_family = "'JetBrains Mono', 'Fira Code', monospace" if icon_str == ">_" else "sans-serif"
+        font_size = "13px" if icon_str == ">_" else "16px"
+        btn.setStyleSheet(f"""
+            QPushButton {{
                 background: rgba(18, 54, 88, 120);
                 border: 1px solid rgba(88, 216, 208, 90);
                 border-radius: 18px;
                 color: #58d8d0;
-                font-size: 16px;
+                font-family: {font_family};
+                font-size: {font_size};
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background: rgba(40, 160, 220, 180);
                 border: 1px solid #57fabc;
                 color: #ffffff;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background: rgba(87, 250, 188, 220);
                 color: #031422;
-            }
+            }}
         """)
         btn.clicked.connect(lambda _=False, k=action_key: self.launch_app.emit(k))
         return btn
@@ -454,6 +489,7 @@ class OSDesktopView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("osDesktopView")
+        self.setAcceptDrops(True)
 
         bg_path = os.path.join(SUBJECT_ASSETS, "osbg.png")
         self.bg_pixmap = QPixmap(bg_path) if os.path.exists(bg_path) else QPixmap()
@@ -499,6 +535,11 @@ class OSDesktopView(QWidget):
             self.folder_cards.append(card)
             shelf_layout.addWidget(card)
 
+        self.shelf_layout = shelf_layout
+
+        self.terminal_icon = DesktopAppIcon(parent=self)
+        self.terminal_icon.launched.connect(self._on_terminal_launched)
+        shelf_layout.addWidget(self.terminal_icon)
         root_layout.addLayout(shelf_layout)
 
         root_layout.addSpacing(18)
@@ -523,6 +564,51 @@ class OSDesktopView(QWidget):
 
     def _on_dock_launch(self, action_key: str):
         self.launch_action.emit(action_key)
+
+    def _on_terminal_launched(self):
+        # Special handling if needed when terminal icon is launched
+        self.launch_action.emit("terminal")
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dropEvent(self, event):
+        dragged_key = event.mimeData().text()
+        self._reorder_desktop_icon(dragged_key, event.position().toPoint())
+        event.acceptProposedAction()
+
+    def _reorder_desktop_icon(self, dragged_key: str, position: QPoint) -> bool:
+        icons = {card.subject_key: card for card in self.folder_cards}
+        icons["terminal"] = self.terminal_icon
+        dragged_icon = icons.get(dragged_key)
+        if dragged_icon is None:
+            return False
+
+        target_index = self.shelf_layout.count()
+        for index in range(self.shelf_layout.count()):
+            item = self.shelf_layout.itemAt(index)
+            widget = item.widget()
+            if widget is not dragged_icon and position.x() < widget.geometry().center().x():
+                target_index = index
+                break
+
+        current_index = self.shelf_layout.indexOf(dragged_icon)
+        if current_index < 0:
+            return False
+        self.shelf_layout.removeWidget(dragged_icon)
+        if current_index < target_index:
+            target_index -= 1
+        self.shelf_layout.insertWidget(target_index, dragged_icon)
+        return True
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -595,3 +681,98 @@ class OSDesktopView(QWidget):
         line_pen = QPen(QColor(88, 216, 208, 140), 1.2)
         painter.setPen(line_pen)
         painter.drawLine(0, int(shelf_y), w, int(shelf_y))
+
+
+class DesktopAppIcon(QFrame):
+    """A playful desktop launcher with an icon pulse and click launch effect."""
+
+    launched = Signal()
+
+    def __init__(self, title: str = "Terminal", subtitle: str = "Neural Shell", parent=None):
+        super().__init__(parent)
+        self.title = title
+        self.subtitle = subtitle
+        self.hovered = False
+        self.setFixedSize(92, 112)
+        self.setCursor(Qt.OpenHandCursor)
+        self.setAccessibleName("Open Fuserio Neural Terminal")
+
+        self._drag_origin = QPoint()
+        self._drag_started = False
+
+    def enterEvent(self, event):
+        self.hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.hovered = False
+        self.update()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_origin = event.position().toPoint()
+            self._drag_started = False
+            self.setCursor(Qt.ClosedHandCursor)
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (
+            event.buttons() & Qt.LeftButton
+            and not self._drag_started
+            and (event.position().toPoint() - self._drag_origin).manhattanLength()
+            >= QApplication.startDragDistance()
+        ):
+            self._drag_started = True
+            drag = QDrag(self)
+            mime_data = QMimeData()
+            mime_data.setText("terminal")
+            drag.setMimeData(mime_data)
+            drag.setPixmap(self.grab())
+            drag.setHotSpot(self._drag_origin)
+            drag.exec(Qt.MoveAction)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.setCursor(Qt.OpenHandCursor)
+            if not self._drag_started:
+                self.launched.emit()
+        self._drag_started = False
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        cx = self.width() / 2.0
+        glow_radius = 38 if self.hovered else 34
+        glow = QRadialGradient(cx, 38, glow_radius)
+        glow.setColorAt(0, QColor(87, 250, 188, 90 if self.hovered else 45))
+        glow.setColorAt(1, QColor(87, 250, 188, 0))
+        painter.setBrush(glow)
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(QPointF(cx, 38), glow_radius, glow_radius)
+
+        rect = QRectF(cx - 34, 8, 68, 68)
+        grad = QLinearGradient(rect.left(), rect.top(), rect.right(), rect.bottom())
+        grad.setColorAt(0, QColor(16, 67, 92, 245))
+        grad.setColorAt(1, QColor(5, 24, 48, 255))
+        painter.setBrush(grad)
+        painter.setPen(QPen(QColor("#57fabc" if self.hovered else "#58d8d0"), 1.5))
+        painter.drawRoundedRect(rect, 17, 17)
+
+        painter.setPen(QPen(QColor("#57fabc"), 3.0, Qt.SolidLine, Qt.RoundCap))
+        painter.drawLine(QPointF(cx - 16, 30), QPointF(cx - 5, 41))
+        painter.drawLine(QPointF(cx - 5, 41), QPointF(cx - 16, 52))
+        painter.setPen(QPen(QColor("#dfffee"), 3.0, Qt.SolidLine, Qt.RoundCap))
+        painter.drawLine(QPointF(cx - 1, 53), QPointF(cx + 16, 53))
+
+        painter.setFont(QFont("sans-serif", 9, QFont.Bold))
+        painter.setPen(QColor("#ffffff" if self.hovered else "#b9eee1"))
+        painter.drawText(QRectF(0, 80, self.width(), 18), Qt.AlignCenter, self.title)
+        painter.setFont(QFont("sans-serif", 7))
+        painter.setPen(QColor("#7ea5c4"))
+        painter.drawText(QRectF(0, 96, self.width(), 14), Qt.AlignCenter, self.subtitle)

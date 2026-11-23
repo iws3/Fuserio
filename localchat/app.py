@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QBoxLayout,
     QComboBox,
     QDoubleSpinBox,
+    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -59,7 +60,14 @@ from localchat.gce import (
     save_progress,
     suggested_topic_areas,
 )
-from localchat.models import MODEL_OPTIONS, model_option
+from localchat.models import MODEL_OPTIONS, model_option, recommended_model_id
+from localchat.terminal_tools import (
+    model_catalog_report,
+    model_inspection_report,
+    memory_info_gb,
+    run_read_only_command,
+    system_report,
+)
 from localchat.lab_data import (
     SUBJECTS as LAB_SUBJECTS,
     experiment_by_id,
@@ -67,7 +75,8 @@ from localchat.lab_data import (
     model_equation,
     model_limitation,
 )
-from localchat.lab_widgets import LabCanvas
+from localchat.lab_widgets import DraggableEquipmentButton, LabCanvas
+from localchat.titration_gif import create_titration_gif
 from localchat.chemistry_practicals import (
     CHEMISTRY,
     Experiment as PracticalExperiment,
@@ -83,49 +92,55 @@ from localchat.os_header import OSHeader
 from localchat.os_sidebar import OSSidebar
 from localchat.os_shutdown import OSShutdownOverlay
 from localchat.offline_tutor import generate_offline_gce_response, detect_subject
+from localchat.diagram_engine import (
+    render_dot_to_base64_png,
+    get_topic_diagram,
+    render_diagram_card,
+    render_markdown_diagrams,
+)
 
 
 SUBJECT_TERMINAL_STYLES = {
     "Chemistry": {
         "badge": "[ 🧪 CHEMISTRY · REACTION & MOLECULAR SYNTHESIS ]",
         "accent": "#57fabc",
-        "bg": "rgba(4, 28, 26, 0.88)",
-        "border": "rgba(87, 250, 188, 0.35)",
+        "bg": "rgba(4, 18, 34, 0.45)",
+        "border": "rgba(87, 250, 188, 0.16)",
         "tag": "GCE CAMEROON · EXPERIMENTAL CHEMISTRY",
     },
     "Physics": {
         "badge": "[ 🎯 PHYSICS · LAWS & EXPERIMENTAL DYNAMICS ]",
         "accent": "#389fff",
-        "bg": "rgba(4, 20, 38, 0.88)",
-        "border": "rgba(56, 159, 255, 0.35)",
+        "bg": "rgba(4, 18, 36, 0.45)",
+        "border": "rgba(56, 159, 255, 0.16)",
         "tag": "GCE CAMEROON · EXPERIMENTAL PHYSICS",
     },
     "Biology": {
         "badge": "[ 🔬 BIOLOGY · PHYSIOLOGY & CELLULAR SYSTEMS ]",
         "accent": "#ff9f43",
-        "bg": "rgba(32, 20, 4, 0.88)",
-        "border": "rgba(255, 159, 67, 0.35)",
+        "bg": "rgba(6, 18, 34, 0.45)",
+        "border": "rgba(255, 159, 67, 0.16)",
         "tag": "GCE CAMEROON · LIFE SCIENCES",
     },
     "Mathematics": {
         "badge": "[ 📐 MATHEMATICS · STEP-BY-STEP CALCULATION ]",
         "accent": "#20bf6b",
-        "bg": "rgba(6, 26, 20, 0.88)",
-        "border": "rgba(32, 191, 107, 0.35)",
+        "bg": "rgba(4, 18, 34, 0.45)",
+        "border": "rgba(32, 191, 107, 0.16)",
         "tag": "GCE CAMEROON · PURE & APPLIED MATHS",
     },
     "Computer Science": {
         "badge": "[ 💻 COMPUTER SCIENCE · ALGORITHMS & SYSTEMS ]",
         "accent": "#a55eea",
-        "bg": "rgba(24, 12, 38, 0.88)",
-        "border": "rgba(165, 94, 234, 0.35)",
+        "bg": "rgba(6, 16, 36, 0.45)",
+        "border": "rgba(165, 94, 234, 0.16)",
         "tag": "GCE CAMEROON · COMPUTING SCIENCES",
     },
     "Science": {
         "badge": "[ ⚙️ GCE STEM · INTEGRATED SCIENCE LAB ]",
         "accent": "#58d8d0",
-        "bg": "rgba(3, 15, 32, 0.88)",
-        "border": "rgba(88, 216, 208, 0.35)",
+        "bg": "rgba(4, 17, 34, 0.45)",
+        "border": "rgba(88, 216, 208, 0.16)",
         "tag": "GCE CAMEROON · GENERAL SYLLABUS",
     },
 }
@@ -566,11 +581,71 @@ def build_stylesheet() -> str:
         color: #f1fff9;
     }
 
-    #chatView {
-        background: rgba(3, 15, 32, 0.98);
-        border: 1px solid rgba(88, 216, 208, 0.32);
-        border-radius: 14px;
-        padding: 16px 20px;
+    #macTerminalWindow {
+        background: rgba(3, 11, 24, 0.96);
+        border: 1.2px solid rgba(88, 216, 208, 0.35);
+        border-radius: 16px;
+    }
+
+    #macTerminalTitlebar {
+        background: rgba(6, 20, 42, 0.98);
+        border-top-left-radius: 15px;
+        border-top-right-radius: 15px;
+        border-bottom: 1px solid rgba(88, 216, 208, 0.22);
+        min-height: 36px;
+        max-height: 36px;
+    }
+
+    #macDotClose {
+        background: #ff5f56;
+        border: 1px solid rgba(200, 40, 30, 0.8);
+        border-radius: 6px;
+    }
+    #macDotClose:hover {
+        background: #ff3b30;
+    }
+
+    #macDotMin {
+        background: #ffbd2e;
+        border: 1px solid rgba(200, 140, 20, 0.8);
+        border-radius: 6px;
+    }
+    #macDotMin:hover {
+        background: #ffaa00;
+    }
+
+    #macDotMax {
+        background: #27c93f;
+        border: 1px solid rgba(20, 160, 40, 0.8);
+        border-radius: 6px;
+    }
+    #macDotMax:hover {
+        background: #20b835;
+    }
+
+    #macTerminalTitle {
+        color: #7ea5c4;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    #macTerminalBadge {
+        color: #57fabc;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 700;
+        background: rgba(87, 250, 188, 0.12);
+        border: 1px solid rgba(87, 250, 188, 0.32);
+        border-radius: 4px;
+        padding: 2px 7px;
+    }
+
+    #chatView, #macTerminalChatView {
+        background: transparent;
+        border: none;
+        border-radius: 0px;
+        padding: 12px 16px;
         color: #eaf7f5;
         font-size: 13px;
         line-height: 1.55;
@@ -588,10 +663,11 @@ def build_stylesheet() -> str:
     }
 
     #terminalCmdBar {
-        background: rgba(3, 15, 32, 0.7);
-        border: 1px solid rgba(88, 216, 208, 0.25);
-        border-radius: 8px;
-        padding: 4px 8px;
+        background: rgba(4, 16, 34, 0.55);
+        border-top: 1px solid rgba(88, 216, 208, 0.15);
+        border-bottom: 1px solid rgba(88, 216, 208, 0.15);
+        padding: 4px 10px;
+        min-height: 32px;
     }
 
     #terminalQuickCmd {
@@ -602,7 +678,7 @@ def build_stylesheet() -> str:
         font-family: 'JetBrains Mono', 'Fira Code', monospace;
         font-size: 11px;
         font-weight: 600;
-        padding: 4px 9px;
+        padding: 3px 9px;
     }
 
     #terminalQuickCmd:hover {
@@ -612,25 +688,27 @@ def build_stylesheet() -> str:
     }
 
     #terminalInputLine {
-        background: rgba(2, 9, 20, 0.98);
-        border: 1.2px solid rgba(88, 216, 208, 0.45);
-        border-radius: 10px;
-        padding: 4px 10px;
+        background: transparent;
+        border: none;
+        border-top: 1px solid rgba(88, 216, 208, 0.12);
+        padding: 4px 14px;
+        min-height: 32px;
+        max-height: 32px;
     }
 
     #terminalInputLine:focus-within {
-        border-color: #57fabc;
+        background: rgba(4, 18, 38, 0.4);
     }
 
     #terminalPromptBadge {
         background: transparent;
         border: none;
         color: #57fabc;
-        font-family: 'JetBrains Mono', 'Fira Code', 'DejaVu Sans Mono', monospace;
-        font-size: 13px;
-        font-weight: 700;
-        padding: 0;
-        min-height: 38px;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 15px;
+        font-weight: 800;
+        padding: 0 4px 0 0;
+        min-height: 24px;
     }
 
     #composer {
@@ -646,6 +724,15 @@ def build_stylesheet() -> str:
     #composer:focus {
         border: none;
         color: #ffffff;
+    }
+
+    #modelBar {
+        background: rgba(4, 14, 28, 0.98);
+        border-top: 1px solid rgba(88, 216, 208, 0.15);
+        border-bottom-left-radius: 15px;
+        border-bottom-right-radius: 15px;
+        padding: 4px 14px;
+        min-height: 28px;
     }
 
     QComboBox {
@@ -792,9 +879,11 @@ def build_stylesheet() -> str:
 class InputField(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setPlaceholderText("Enter a prompt for the local model...")
-        self.setFixedHeight(72)
+        self.setPlaceholderText("")
+        self.setFixedHeight(30)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setLineWrapMode(QTextEdit.NoWrap)
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not event.modifiers() & Qt.ShiftModifier:
@@ -1607,7 +1696,7 @@ class MainWindow(QMainWindow):
             self.open_gce_levels()
         elif action_key == "lab":
             self.open_experiment_library()
-        elif action_key == "chat":
+        elif action_key in {"chat", "terminal"}:
             self.open_ai_workspace()
         elif action_key == "math":
             self.open_math_analysis()
@@ -1656,21 +1745,83 @@ class MainWindow(QMainWindow):
 
     def _build_chat_page(self):
         page = QWidget()
+        page.setObjectName("chatPage")
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(0)
 
         self.study_context_label = QLabel("")
         self.study_context_label.setObjectName("studySubheading")
         self.study_context_label.hide()
         layout.addWidget(self.study_context_label)
 
+        # Mac Terminal Unified Window
+        self.mac_terminal_window = QWidget()
+        self.mac_terminal_window.setObjectName("macTerminalWindow")
+        term_win_layout = QVBoxLayout(self.mac_terminal_window)
+        term_win_layout.setContentsMargins(0, 0, 0, 0)
+        term_win_layout.setSpacing(0)
+
+        # 1. Mac Titlebar with traffic lights
+        mac_titlebar = QWidget()
+        mac_titlebar.setObjectName("macTerminalTitlebar")
+        title_layout = QHBoxLayout(mac_titlebar)
+        title_layout.setContentsMargins(14, 0, 14, 0)
+        title_layout.setSpacing(8)
+
+        dots_widget = QWidget()
+        dots_layout = QHBoxLayout(dots_widget)
+        dots_layout.setContentsMargins(0, 0, 0, 0)
+        dots_layout.setSpacing(6)
+
+        red_dot = QPushButton()
+        red_dot.setObjectName("macDotClose")
+        red_dot.setFixedSize(12, 12)
+        red_dot.setToolTip("Clear terminal buffer")
+        red_dot.setCursor(Qt.PointingHandCursor)
+        red_dot.clicked.connect(self.clear_chat)
+
+        yellow_dot = QPushButton()
+        yellow_dot.setObjectName("macDotMin")
+        yellow_dot.setFixedSize(12, 12)
+        yellow_dot.setToolTip("Scroll to top")
+        yellow_dot.setCursor(Qt.PointingHandCursor)
+        yellow_dot.clicked.connect(lambda: self.chat_view.verticalScrollBar().setValue(0))
+
+        green_dot = QPushButton()
+        green_dot.setObjectName("macDotMax")
+        green_dot.setFixedSize(12, 12)
+        green_dot.setToolTip("Scroll to latest prompt")
+        green_dot.setCursor(Qt.PointingHandCursor)
+        green_dot.clicked.connect(lambda: self.chat_view.verticalScrollBar().setValue(self.chat_view.verticalScrollBar().maximum()))
+
+        dots_layout.addWidget(red_dot)
+        dots_layout.addWidget(yellow_dot)
+        dots_layout.addWidget(green_dot)
+        title_layout.addWidget(dots_widget)
+
+        title_layout.addStretch(1)
+
+        terminal_title_lbl = QLabel("fuserio@gce-os: ~ (zsh) — 80×24")
+        terminal_title_lbl.setObjectName("macTerminalTitle")
+        title_layout.addWidget(terminal_title_lbl)
+
+        title_layout.addStretch(1)
+
+        core_badge = QLabel("● OFFLINE NEURAL CORE")
+        core_badge.setObjectName("macTerminalBadge")
+        title_layout.addWidget(core_badge)
+
+        term_win_layout.addWidget(mac_titlebar)
+
+        # 2. Main Terminal Chat View
         self.chat_view = QTextBrowser()
-        self.chat_view.setObjectName("chatView")
+        self.chat_view.setObjectName("macTerminalChatView")
         self.chat_view.setReadOnly(True)
         self.chat_view.setOpenExternalLinks(False)
-        layout.addWidget(self.chat_view, 1)
+        term_win_layout.addWidget(self.chat_view, 1)
 
+        # Hidden mode_bar (maintained for learning modes)
         self.mode_bar = QWidget()
         mode_layout = QHBoxLayout(self.mode_bar)
         mode_layout.setContentsMargins(0, 0, 0, 0)
@@ -1683,63 +1834,23 @@ class MainWindow(QMainWindow):
             mode_layout.addWidget(button)
             self.mode_buttons.append(button)
         self.mode_bar.hide()
-        layout.addWidget(self.mode_bar)
+        term_win_layout.addWidget(self.mode_bar)
 
-        model_bar = QWidget()
-        model_bar.setObjectName("modelBar")
-        model_layout = QHBoxLayout(model_bar)
-        model_layout.setContentsMargins(12, 6, 12, 6)
-        model_layout.setSpacing(12)
-
-        model_eyebrow = QLabel("⚡ LOCAL MODEL")
-        model_eyebrow.setObjectName("modelEyebrow")
-        model_layout.addWidget(model_eyebrow)
-
-        self.model_selector = QComboBox()
-        self.model_selector.setObjectName("modelSelector")
-        self.model_selector.setAccessibleName("Choose a local language model")
-        self.model_selector.setMinimumWidth(230)
-        self.model_selector.setMinimumContentsLength(20)
-        self.model_selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        for option in MODEL_OPTIONS:
-            self.model_selector.addItem(f"{option.icon}  {option.name}", option.model_id)
-            self.model_selector.setItemData(
-                self.model_selector.count() - 1,
-                f"{option.name} [{option.tag}]\n{option.description} · {option.quantization}",
-                Qt.ToolTipRole,
-            )
-        saved_model_id = self.progress.get("model_id", "")
-        saved_model_index = self.model_selector.findData(saved_model_id)
-        if saved_model_index >= 0:
-            self.model_selector.setCurrentIndex(saved_model_index)
-        model_layout.addWidget(self.model_selector)
-
-        self.model_detail = QLabel("")
-        self.model_detail.setObjectName("modelDetail")
-        self.model_detail.setAccessibleName("Selected model description and quantization")
-        model_layout.addWidget(self.model_detail, 1)
-
-        self.model_reconnect_button = QPushButton("Connect")
-        self.model_reconnect_button.setObjectName("modelReconnectButton")
-        self.model_reconnect_button.setToolTip("Connect or restart the selected local model")
-        model_layout.addWidget(self.model_reconnect_button)
-        self._update_model_detail()
-        layout.addWidget(model_bar)
-
-        # Quick clickable terminal help command bar
+        # 3. Help Commands Bar
         cmd_bar = QWidget()
         cmd_bar.setObjectName("terminalCmdBar")
         cmd_layout = QHBoxLayout(cmd_bar)
-        cmd_layout.setContentsMargins(6, 2, 6, 2)
+        cmd_layout.setContentsMargins(14, 4, 14, 4)
         cmd_layout.setSpacing(6)
 
-        prefix_lbl = QLabel("HELP COMMANDS:")
+        prefix_lbl = QLabel("HELP:")
         prefix_lbl.setStyleSheet("color: #7ea5c4; font-size: 10px; font-weight: bold; font-family: monospace;")
         cmd_layout.addWidget(prefix_lbl)
 
         quick_cmds = [
             ("help", "Display command reference"),
             ("clear", "Clear terminal screen"),
+            ("diagram <topic>", "Render real-time Graphviz scientific diagram"),
             ("solve <eq>", "Step-by-step math calculation"),
             ("quiz <topic>", "Generate past-paper drill"),
             ("chemistry", "Switch to Chemistry mode"),
@@ -1755,32 +1866,88 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(lambda _=False, c=cmd_name: self._on_quick_cmd_clicked(c))
             cmd_layout.addWidget(btn)
         cmd_layout.addStretch(1)
-        layout.addWidget(cmd_bar)
+        term_win_layout.addWidget(cmd_bar)
 
+        # 4. Borderless Terminal Input Line
         terminal_input_line = QWidget()
         terminal_input_line.setObjectName("terminalInputLine")
         term_layout = QHBoxLayout(terminal_input_line)
-        term_layout.setContentsMargins(12, 6, 12, 6)
-        term_layout.setSpacing(8)
+        term_layout.setContentsMargins(14, 4, 14, 4)
+        term_layout.setSpacing(6)
 
-        self.terminal_prompt_lbl = QLabel("fuserio@gce-os:~$")
+        self.terminal_prompt_lbl = QLabel("❯")
         self.terminal_prompt_lbl.setObjectName("terminalPromptBadge")
         term_layout.addWidget(self.terminal_prompt_lbl)
 
         self.input = InputField()
         self.input.setObjectName("composer")
-        self.input.setPlaceholderText("Type command or query (e.g. explain electrolysis, solve x^2-4=0, help, clear)...")
+        self.input.setPlaceholderText("")
         term_layout.addWidget(self.input, 1)
 
         self.send_button = QPushButton("↵ RUN")
         self.send_button.setObjectName("sendButton")
         self.send_button.setEnabled(False)
         self.send_button.setToolTip("Execute command (Return)")
+        self.send_button.hide()
         term_layout.addWidget(self.send_button)
         self.send_button.clicked.connect(self._send_or_stop)
+        self.chat_view.mousePressEvent = lambda e: (QTextBrowser.mousePressEvent(self.chat_view, e), self.input.setFocus())
+
+        term_win_layout.addWidget(terminal_input_line)
+
+        # 5. Integrated Sleek Statusline (tmux / terminal model bar)
+        model_bar = QWidget()
+        model_bar.setObjectName("modelBar")
+        model_layout = QHBoxLayout(model_bar)
+        model_layout.setContentsMargins(14, 4, 14, 4)
+        model_layout.setSpacing(10)
+
+        model_eyebrow = QLabel("⚡ MODEL:")
+        model_eyebrow.setObjectName("modelEyebrow")
+        model_layout.addWidget(model_eyebrow)
+
+        self.model_selector = QComboBox()
+        self.model_selector.setObjectName("modelSelector")
+        self.model_selector.setAccessibleName("Choose a local language model")
+        self.model_selector.setMinimumWidth(180)
+        self.model_selector.setMinimumContentsLength(16)
+        self.model_selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        for option in MODEL_OPTIONS:
+            self.model_selector.addItem(f"{option.icon}  {option.name}", option.model_id)
+            self.model_selector.setItemData(
+                self.model_selector.count() - 1,
+                f"{option.name} [{option.tag}]\n{option.description} · {option.quantization}",
+                Qt.ToolTipRole,
+            )
+        saved_model_id = self.progress.get("model_id", "")
+        saved_model_index = self.model_selector.findData(saved_model_id)
+        total_memory_gb, _available_memory_gb = memory_info_gb()
+        recommended_id = recommended_model_id(total_memory_gb)
+        if total_memory_gb is not None and total_memory_gb <= 4.5:
+            self.model_selector.setCurrentIndex(self.model_selector.findData(recommended_id))
+        elif saved_model_index >= 0:
+            self.model_selector.setCurrentIndex(saved_model_index)
+        else:
+            self.model_selector.setCurrentIndex(self.model_selector.findData(recommended_id))
+        model_layout.addWidget(self.model_selector)
+
+        self.model_detail = QLabel("")
+        self.model_detail.setObjectName("modelDetail")
+        self.model_detail.setAccessibleName("Selected model description and quantization")
+        model_layout.addWidget(self.model_detail, 1)
+
+        self.model_reconnect_button = QPushButton("Connect")
+        self.model_reconnect_button.setObjectName("modelReconnectButton")
+        self.model_reconnect_button.setToolTip("Connect or restart the selected local model")
+        model_layout.addWidget(self.model_reconnect_button)
+        self._update_model_detail()
+
         self.model_selector.currentIndexChanged.connect(self._model_selected)
         self.model_reconnect_button.clicked.connect(self._retry_selected_model)
-        layout.addWidget(terminal_input_line)
+
+        term_win_layout.addWidget(model_bar)
+
+        layout.addWidget(self.mac_terminal_window)
 
         self.chat_page = page
         self.content_stack.addWidget(page)
@@ -2021,6 +2188,11 @@ class MainWindow(QMainWindow):
         self.lab_tutor_button.setToolTip("Ask the local AI tutor to explain this model and its current results")
         self.lab_tutor_button.clicked.connect(self.ask_lab_tutor)
         toolbar_layout.addWidget(self.lab_tutor_button)
+        self.lab_export_gif_button = QPushButton("Export GIF")
+        self.lab_export_gif_button.setObjectName("studyModeButton")
+        self.lab_export_gif_button.setToolTip("Save a looping animation of the titration procedure")
+        self.lab_export_gif_button.clicked.connect(self._export_titration_gif)
+        toolbar_layout.addWidget(self.lab_export_gif_button)
         self.lab_step_button = QPushButton("Step →")
         self.lab_step_button.setObjectName("studyModeButton")
         self.lab_step_button.clicked.connect(self._step_lab_simulation)
@@ -2968,9 +3140,11 @@ class MainWindow(QMainWindow):
         self.lab_observation_edit.setPlainText(notes.get("observation", ""))
         self.lab_prediction_edit.blockSignals(False)
         self.lab_observation_edit.blockSignals(False)
-        if identifier not in {"chemistry-playground", "circuit-playground"}:
+        if identifier not in {"chemistry-playground", "circuit-playground", "titration"}:
             self.lab_canvas.play()
-        self.lab_play_button.setText("Ⅱ  Pause simulation")
+        self.lab_play_button.setText(
+            "▶  Run simulation" if identifier == "titration" else "Ⅱ  Pause simulation"
+        )
         self.sidebar.hide()
         if hasattr(self, "os_header"):
             self.os_header.set_breadcrumb(f"Desktop › Lab › {experiment.title}")
@@ -3019,10 +3193,33 @@ class MainWindow(QMainWindow):
             wb_layout.setContentsMargins(0, 0, 0, 8)
             wb_layout.setSpacing(6)
 
-            title_label = QLabel("🧪 TITRATION WORKBENCH (ADD INGREDIENTS)")
+            title_label = QLabel("🧪 TITRATION BENCH · BUILD YOUR SETUP")
             title_label.setObjectName("labControlLabel")
             title_label.setStyleSheet("font-weight: bold; color: #57fabc; font-size: 11px;")
             wb_layout.addWidget(title_label)
+
+            cupboard_title = QLabel("CUPBOARD · DRAG EQUIPMENT ONTO THE BENCH")
+            cupboard_title.setObjectName("labControlLabel")
+            wb_layout.addWidget(cupboard_title)
+            cupboard_row = QHBoxLayout()
+            cupboard_row.setSpacing(6)
+            for equipment_id, label in (
+                ("flask", "Flask"),
+                ("pipette", "Pipette"),
+                ("indicator", "Indicator"),
+                ("burette", "Burette"),
+                ("wash_bottle", "Wash bottle"),
+            ):
+                equipment_button = DraggableEquipmentButton(equipment_id, label)
+                equipment_button.setObjectName("studyModeButton")
+                equipment_button.setToolTip(f"Drag {label.lower()} onto the animated lab bench")
+                cupboard_row.addWidget(equipment_button)
+            wb_layout.addLayout(cupboard_row)
+
+            self.titration_setup_label = QLabel()
+            self.titration_setup_label.setObjectName("labModelNote")
+            self.titration_setup_label.setWordWrap(True)
+            wb_layout.addWidget(self.titration_setup_label)
 
             row1 = QHBoxLayout()
             row1.setSpacing(6)
@@ -3075,7 +3272,18 @@ class MainWindow(QMainWindow):
             row2.addWidget(refill_btn)
             wb_layout.addLayout(row2)
 
+            self.titration_action_buttons = {
+                "pipette_acid": pipette_btn,
+                "add_indicator": indicator_btn,
+                "wash_water": wash_btn,
+                "dropwise": drop_btn,
+                "add_1ml": coarse_btn,
+                "swirl": swirl_btn,
+                "fill_burette": refill_btn,
+            }
+
             self.lab_controls_layout.addWidget(workbench)
+            self._sync_titration_setup()
 
         elif experiment.identifier == "reaction-rate":
             workbench = QWidget()
@@ -3301,6 +3509,37 @@ class MainWindow(QMainWindow):
                             unit = next((p.unit for p in self.active_experiment.parameters if p.key == key), "")
                             self.lab_parameter_labels[key].setText(f"{val} {unit}".strip())
         self._update_lab_metrics()
+        self._sync_titration_setup()
+
+    def _sync_titration_setup(self):
+        if (
+            not self.active_experiment
+            or self.active_experiment.identifier != "titration"
+            or not hasattr(self, "titration_setup_label")
+        ):
+            return
+
+        canvas = self.lab_canvas
+        for action, button in self.titration_action_buttons.items():
+            button.setEnabled(canvas.titration_action_ready(action))
+
+        equipment = canvas.titration_equipment
+        if not {"flask", "pipette"}.issubset(equipment):
+            guidance = "STEP 1 · Place the conical flask and volumetric pipette on the bench."
+        elif not canvas.titration_analyte_pipetted:
+            guidance = "STEP 2 · Transfer exactly 25.0 mL of analyte into the flask."
+        elif "indicator" not in equipment or canvas.titration_indicator_drops == 0:
+            guidance = "STEP 3 · Place the indicator, then add 2–3 drops to the sample."
+        elif "burette" not in equipment:
+            guidance = "STEP 4 · Place the burette. Add titrant steadily, then switch to drops near the endpoint."
+        else:
+            status = canvas.measurements()["STATUS"]
+            guidance = (
+                "NEAR THE ENDPOINT · Use 0.10 mL drops and swirl after each addition."
+                if "Approaching" in status or "passed" in status
+                else "READY · Record the initial reading, then add titrant and watch the indicator."
+            )
+        self.titration_setup_label.setText(guidance)
 
     def _titration_action(self, action: str):
         self.lab_canvas.titration_action(action)
@@ -3381,15 +3620,38 @@ class MainWindow(QMainWindow):
         }
         self._save_progress()
 
+    def _export_titration_gif(self):
+        if not self.active_experiment or self.active_experiment.identifier != "titration":
+            self.statusBar().showMessage("Open the acid-base titration bench to export its operation GIF.")
+            return
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export titration simulation",
+            "titration-operation.gif",
+            "Animated GIF (*.gif)",
+        )
+        if not output_path:
+            return
+        if not output_path.lower().endswith(".gif"):
+            output_path += ".gif"
+        try:
+            saved_path = create_titration_gif(output_path)
+        except (OSError, RuntimeError, ValueError) as error:
+            self.statusBar().showMessage(f"GIF export failed: {error}", 8000)
+            return
+        self.statusBar().showMessage(f"Titration GIF saved: {saved_path}", 8000)
+
     def ask_lab_tutor(self):
         experiment = self.active_experiment
         if not experiment:
             return
-        if not self.base_url:
-            self.statusBar().showMessage("Connect a local model before asking the tutor about this experiment.")
-            return
         current_readings = "; ".join(
             f"{name}: {value}" for name, value in self.lab_canvas.measurements().items()
+        )
+        next_step = (
+            self.titration_setup_label.text()
+            if experiment.identifier == "titration" and hasattr(self, "titration_setup_label")
+            else "Compare the current readings with your prediction."
         )
         prompt = "\n".join(
             (
@@ -3419,6 +3681,20 @@ class MainWindow(QMainWindow):
         self.active_workspace = "experiments"
         self.lab_screen = "tutor"
         self.content_stack.setCurrentWidget(self.lab_detail_page)
+        if not self.base_url:
+            _, offline_response = generate_offline_gce_response(
+                f"Explain {experiment.title}. Current readings: {current_readings}. "
+                f"Recommended next step: {next_step}",
+                experiment.subject,
+                self.gce_level or "Ordinary Level",
+            )
+            self.lab_tutor_content = (
+                f"### Live simulation check\n\n**Readings:** {current_readings}\n\n"
+                f"**Next step:** {next_step}\n\n---\n\n{offline_response}"
+            )
+            self._render_lab_tutor_stream(completed=True)
+            self.statusBar().showMessage("Offline lab guidance is ready.")
+            return
         self._start_chat_request([
             {"role": "system", "content": prompt},
             {"role": "user", "content": f"Explain the experiment and tell me what to do next based on the current readings: {current_readings}."},
@@ -3509,11 +3785,12 @@ class MainWindow(QMainWindow):
         self.gce_modes = []
         self.gce_screen = "chat"
         self.study_context_label.hide()
-        self.mode_bar.show()
+        self.mode_bar.hide()
         self.back_button.hide()
         self.send_button.setEnabled(True)
         self.content_stack.setCurrentWidget(self.chat_page)
         self._render_messages()
+        self.input.setFocus()
 
     def _restore_gce_selection(self):
         selection = self.progress.get("selection", {})
@@ -3766,6 +4043,19 @@ class MainWindow(QMainWindow):
         self._render_messages()
         self.statusBar().showMessage("Terminal screen cleared")
 
+    def _write_terminal_reply(self, command: str, response: str):
+        self.input.clear()
+        self.messages.append({"role": "user", "content": command})
+        self.messages.append({"role": "assistant", "content": response, "streaming": False})
+        self._render_messages()
+        self._schedule_progress_save()
+
+    def _inspect_selected_model(self) -> str:
+        option = model_option(self.model_selector.currentData())
+        if option is None:
+            return "No local model profile is selected."
+        return model_inspection_report(option, self.active_model, self.server_output)
+
     def stop_streaming(self):
         if hasattr(self, "_offline_timer") and self._offline_timer.isActive():
             self._offline_timer.stop()
@@ -3793,35 +4083,129 @@ class MainWindow(QMainWindow):
             self.clear_chat()
             return
         if cmd in {"help", "/help", "man", "--help", "-h"}:
-            self.input.clear()
-            self.messages.append({"role": "user", "content": message})
             help_content = (
                 "**FUSERIO NEURAL SHELL v2.4 (MANUAL)**\n\n"
                 "**Command Usage:**\n"
+                "- `pwd`, `whoami`, `uname`, `free`, `ls` : Read-only local system information\n"
+                "- `models` : List available quantized model profiles\n"
+                "- `model inspect` : Inspect selected model profile and loaded GGUF metadata\n"
+                "- `/agent help` : List supported local agent actions\n"
+                "- `/agent inspect model` : Inspect the selected local model\n"
+                "- `/agent system` : Summarize local hardware and OS\n"
+                "- `/agent open titration` : Open the virtual acid-base lab\n"
                 "- `ask <query>` : Query offline Cameroon GCE neural synthesizer\n"
                 "- `solve <expression>` : Step-by-step mathematical & scientific solution\n"
                 "- `quiz <topic>` : Practice exam questions for Ordinary/Advanced Level\n"
+                "- `diagram <topic>` : Render real-time Graphviz scientific diagram & mechanism\n"
                 "- `explain <concept>` : Detailed conceptual syllabus breakdown\n"
                 "- `clear` : Clear terminal screen and history\n"
                 "- `status` : Print local AI server and offline model status\n\n"
-                "*Tip: You can also enter any syllabus topic directly without a prefix.*"
+                "*Tip: You can also write custom DOT diagrams or ask any question directly.*"
             )
-            self.messages.append({"role": "assistant", "content": help_content, "streaming": False})
-            self._render_messages()
-            self._schedule_progress_save()
+            self._write_terminal_reply(message, help_content)
             return
         if cmd in {"status", "/status"}:
-            self.input.clear()
-            self.messages.append({"role": "user", "content": message})
             status_content = (
                 "**SYSTEM DIAGNOSTICS & HARDWARE COMPUTE**\n\n"
                 f"- **Core Engine:** Fuserio Offline Neural Engine\n"
+                f"- **Diagram Engine:** Graphviz Python Real-Time Pipeline\n"
                 f"- **Active Model:** {self.model_selector.currentText()}\n"
+                f"- **Model profile:** {model_option(self.model_selector.currentData()).memory_guidance}\n"
                 f"- **GCE Target:** {self.gce_subject or 'General STEM'} ({self.gce_level or 'All Levels'})\n"
                 "- **Network Mode:** 100% Offline Local Inference\n"
                 "- **Status:** Ready for input"
             )
-            self.messages.append({"role": "assistant", "content": status_content, "streaming": False})
+            self._write_terminal_reply(message, status_content)
+            return
+        if cmd in {"models", "model list"}:
+            self._write_terminal_reply(message, model_catalog_report())
+            return
+        if cmd in {"model", "model inspect", "model info", "model architecture", "architecture"}:
+            self._write_terminal_reply(message, self._inspect_selected_model())
+            return
+        if cmd.startswith("/agent"):
+            request = cmd[len("/agent"):].strip()
+            if request in {"open titration", "open lab titration", "titration"}:
+                self.open_experiment("titration")
+                self.statusBar().showMessage("Local agent opened the acid-base titration lab.")
+                return
+            if request in {"inspect model", "model", "model inspect", "architecture"}:
+                response = self._inspect_selected_model()
+            elif request in {"list models", "models"}:
+                response = model_catalog_report()
+            elif request in {"system", "system info", "hardware", "sysinfo"}:
+                response = system_report()
+            elif request in {"", "help"}:
+                response = (
+                    "**Local agent actions**\n"
+                    "- `/agent inspect model`\n"
+                    "- `/agent list models`\n"
+                    "- `/agent system`\n"
+                    "- `/agent open titration`\n\n"
+                    "The agent only runs these explicit, read-only local inspections or opens an app screen."
+                )
+            else:
+                response = "That local action is not available. Run `/agent help` to see supported actions."
+            self._write_terminal_reply(message, response)
+            return
+        system_command = run_read_only_command(cmd)
+        if system_command is not None:
+            self._write_terminal_reply(message, f"```text\n{system_command}\n```")
+            return
+        if (
+            cmd.startswith("diagram ")
+            or cmd.startswith("draw ")
+            or cmd.startswith("graph ")
+            or cmd.startswith("figure ")
+            or cmd in {"diagram", "draw", "figure"}
+        ):
+            parts = message.split(maxsplit=1)
+            raw_topic = parts[1].strip() if len(parts) > 1 else ""
+            clean_topic = re.sub(
+                r"^(?:figure\s*(?:of|for|:)?\s*|diagram\s*(?:of|for|:)?\s*|explain\s*(?:about|on|the)?\s*|about\s*|a\s+|the\s+)+",
+                "",
+                raw_topic,
+                flags=re.IGNORECASE,
+            ).strip()
+
+            topic = clean_topic or (self.gce_subject or "titration")
+            self.input.clear()
+            self.messages.append({"role": "user", "content": message})
+            diag_dot = get_topic_diagram(topic)
+            if not diag_dot and clean_topic != (self.gce_subject or ""):
+                diag_dot = get_topic_diagram(self.gce_subject or "")
+
+            if not diag_dot:
+                safe_title = re.sub(r'["\\]', '', topic.title())
+                diag_dot = f"""
+digraph ScientificMechanism {{
+    graph [__GRAPH_ATTRS__ label="\\n{safe_title.upper()} · ARCHITECTURAL PROCESS FLOW" fontcolor="#58d8d0" fontsize=12];
+    node [__NODE_ATTRS__];
+    edge [__EDGE_ATTRS__];
+
+    Initial [label="{safe_title}\\nInitial State / Principle", fillcolor="#0a2a4e", color="#389fff"];
+    Process [label="Mechanism & Pathway\\nRate-Determining Step / Law", fillcolor="#182c44", color="#58d8d0"];
+    Outcome [label="Syllabus Observation\\nFinal State & Measured Yield", fillcolor="#102e22", color="#57fabc"];
+
+    Initial -> Process [label="activation / trigger"];
+    Process -> Outcome [label="yield & observation"];
+}}
+"""
+            content = (
+                f"### Real-Time Scientific Diagram: {topic.title()}\n\n"
+                f"Generated dynamically via **Python Graphviz** layout engine for Cameroon GCE Syllabus.\n\n"
+                f"```dot\n{diag_dot.strip()}\n```\n\n"
+                "> **Syllabus Tip:** You can also ask for specific diagrams across Physics, Chemistry, Biology, and Math, or write custom DOT syntax directly."
+            )
+            self.messages.append({"role": "assistant", "content": content, "streaming": False})
+            self._render_messages()
+            self._schedule_progress_save()
+            return
+        if cmd.startswith("digraph ") or cmd.startswith("graph ") or ("->" in cmd and "{" in cmd):
+            self.input.clear()
+            self.messages.append({"role": "user", "content": message})
+            content = f"**Compiled Graphviz Architecture:**\n\n```dot\n{message.strip()}\n```"
+            self.messages.append({"role": "assistant", "content": content, "streaming": False})
             self._render_messages()
             self._schedule_progress_save()
             return
@@ -3959,11 +4343,14 @@ class MainWindow(QMainWindow):
             port = server_socket.getsockname()[1]
         api_key = secrets.token_hex(24)
         base_url = f"http://127.0.0.1:{port}"
+        option = model_option(model_id)
+        context_size = option.context_size if option else 2048
         process = QProcess(self)
         process.setProcessChannelMode(QProcess.MergedChannels)
         process.setProgram(server_path)
         process.setArguments([
-            "-hf", model_id, "-c", "4096", "--host", "127.0.0.1",
+            "-hf", model_id, "-c", str(context_size), "-ngl", "0",
+            "-b", "128", "-ub", "64", "--parallel", "1", "--host", "127.0.0.1",
             "--port", str(port), "--api-key", api_key, "--no-webui",
         ])
         environment = QProcessEnvironment.systemEnvironment()
@@ -4153,47 +4540,24 @@ class MainWindow(QMainWindow):
     def _render_messages(self):
         document = [
             '<html><head><style>'
-            'body { background-color: #020914; color: #eaf7f5; '
-            'font-family: "JetBrains Mono", "Fira Code", "DejaVu Sans Mono", monospace; font-size: 13px; margin: 16px; }'
+            'body { background-color: transparent; color: #eaf7f5; '
+            'font-family: "JetBrains Mono", "Fira Code", "DejaVu Sans Mono", monospace; font-size: 13px; margin: 8px 12px; }'
             'table { border-collapse: separate; }'
             '</style></head><body>',
-            # Terminal Chrome Header
-            '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:14px;border-bottom:1px solid rgba(88,216,208,0.25);padding-bottom:10px;">'
-            '<tr>'
-            '<td width="70" valign="middle">'
-            '  <span style="color:#ff5f56;font-size:14px;">●</span>'
-            '  <span style="color:#ffbd2e;font-size:14px;margin-left:4px;">●</span>'
-            '  <span style="color:#27c93f;font-size:14px;margin-left:4px;">●</span>'
-            '</td>'
-            '<td align="center" valign="middle">'
-            '  <span style="color:#7ea5c4;font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:bold;">fuserio@gce-os: ~ (offline-neural-shell-v2.4) · tty1</span>'
-            '</td>'
-            '<td width="100" align="right" valign="middle">'
-            '  <span style="color:#57fabc;font-family:monospace;font-size:10px;background:rgba(87,250,188,0.12);padding:3px 8px;border-radius:4px;border:1px solid rgba(87,250,188,0.35);font-weight:bold;">● ONLINE</span>'
-            '</td>'
-            '</tr>'
-            '</table>',
         ]
 
         if not self.messages:
             document.append(
-                '<table width="100%" cellspacing="0" cellpadding="0" style="margin-top:10px;">'
-                '<tr><td>'
-                '<div style="color:#57fabc;font-family:\'JetBrains Mono\',\'Fira Code\',monospace;font-size:12px;line-height:1.55;background:rgba(4, 18, 38, 0.7);padding:16px 20px;border:1px solid rgba(88, 216, 208, 0.35);border-radius:8px;">'
-                '<span style="color:#58d8d0;font-weight:bold;">┌── [ FUSERIO NEURAL TERMINAL v2.4 ] ──────────────────────────────────────────┐</span><br>'
-                '│ <span style="color:#ffffff;font-weight:bold;">System:</span> Cameroon GCE Offline Neural Core (100% Offline AI Enabled)           │<br>'
-                '│ <span style="color:#ffffff;font-weight:bold;">Curriculum:</span> Ordinary Level &amp; Advanced Level STEM Syllabi                   │<br>'
-                '│ <span style="color:#ffffff;font-weight:bold;">Status:</span> Ready for commands &amp; syllabus queries. Type below to execute.       │<br>'
-                '│ <span style="color:#7ea5c4;">Built-in Commands:</span>                                                        │<br>'
-                '│   • <span style="color:#57fabc;">ask &lt;query&gt;</span>     : Query offline GCE knowledge engine                    │<br>'
-                '│   • <span style="color:#57fabc;">solve &lt;eq&gt;</span>      : Step-by-step formula and mathematics solver          │<br>'
-                '│   • <span style="color:#57fabc;">quiz &lt;topic&gt;</span>    : Generate past-paper exam drill questions             │<br>'
-                '│   • <span style="color:#57fabc;">clear</span>           : Clear terminal scrollback                            │<br>'
-                '│   • <span style="color:#57fabc;">help</span>            : Print complete command manual                        │<br>'
-                '│ <span style="color:#89b4c8;">Tip: You can also directly type any question without a command prefix.</span>        │<br>'
-                '<span style="color:#58d8d0;font-weight:bold;">└── Enter your prompt below ───────────────────────────────────────────────────┘</span>'
+                '<div style="font-family:\'JetBrains Mono\',\'Fira Code\',monospace;color:#6489a8;font-size:12px;line-height:1.75;padding:8px 4px;">'
+                '<span style="color:#57fabc;font-weight:bold;">Last login:</span> on ttys001 (offline-neural-core-v2.4)<br>'
+                '<span style="color:#7ea5c4;">fuserio@gce-os: ~ (zsh)</span><br><br>'
+                '<span style="color:#58d8d0;font-weight:bold;">Commands help:</span><br>'
+                '  <span style="color:#57fabc;">$ help</span>        · Display command manual<br>'
+                '  <span style="color:#57fabc;">$ clear</span>       · Clear terminal screen<br>'
+                '  <span style="color:#57fabc;">$ solve &lt;eq&gt;</span>  · Step-by-step scientific calculation<br>'
+                '  <span style="color:#57fabc;">$ quiz &lt;topic&gt;</span>· Generate past-paper exam drill<br>'
+                '<span style="color:#7ea5c4;font-size:11px;">Or directly type any syllabus prompt below.</span>'
                 '</div>'
-                '</td></tr></table>'
             )
 
         for turn_number, message in enumerate(self.messages, start=1):
@@ -4202,10 +4566,10 @@ class MainWindow(QMainWindow):
 
             if role == "user":
                 document.append(
-                    '<table width="100%" cellspacing="0" cellpadding="0" style="margin: 10px 0 6px 0;">'
+                    '<table width="100%" cellspacing="0" cellpadding="0" style="margin: 6px 0 4px 0;">'
                     '<tr><td>'
-                    '<div style="font-family:\'JetBrains Mono\',\'Fira Code\',monospace;font-size:13px;line-height:1.55;background:rgba(10,36,68,0.7);border-left:3px solid #ffc478;border-radius:4px;padding:9px 14px;">'
-                    f'<span style="color:#57fabc;font-weight:bold;">fuserio@gce-os</span><span style="color:#7ea5c4;">:</span><span style="color:#58d8d0;">~</span><span style="color:#ffc478;font-weight:bold;">$</span> <span style="color:#ffffff;font-weight:bold;">{content}</span>'
+                    '<div style="font-family:\'JetBrains Mono\',\'Fira Code\',monospace;font-size:13px;line-height:1.5;">'
+                    f'<span style="color:#57fabc;font-weight:bold;">❯ </span><span style="color:#ffffff;font-weight:600;">{content}</span>'
                     '</div>'
                     '</td></tr></table>'
                 )
@@ -4215,7 +4579,7 @@ class MainWindow(QMainWindow):
             is_streaming = bool(message.get("streaming"))
             if reasoning:
                 reasoning_panel = (
-                    '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:10px;background:rgba(2,10,22,0.9);border:1px solid rgba(88,216,208,0.25);border-radius:4px;">'
+                    '<table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:10px;background:rgba(3,11,24,0.6);border:1px solid rgba(88,216,208,0.18);border-radius:4px;">'
                     '<tr><td style="padding:10px 14px;">'
                     '<div style="color:#58d8d0;font-size:10px;font-weight:bold;font-family:monospace;margin-bottom:6px;">'
                     '┌── 🧠 REASONING TRACE ──────────────────────────────────────────────</div>'
@@ -4269,7 +4633,7 @@ class MainWindow(QMainWindow):
             document.append(
                 '<table width="100%" cellspacing="0" cellpadding="0" style="margin: 6px 0 16px 0;">'
                 '<tr><td>'
-                f'<div style="background:{box_bg};border:1px solid {box_border};border-left:3px solid {accent_col};border-radius:6px;padding:14px 18px;font-family:\'JetBrains Mono\',\'Fira Code\',sans-serif;">'
+                f'<div style="background:{box_bg};border:1px solid {box_border};border-left:2px solid {accent_col};border-radius:4px;padding:12px 16px;font-family:\'JetBrains Mono\',\'Fira Code\',monospace,sans-serif;">'
                 '  <table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:8px;">'
                 '  <tr>'
                 '    <td align="left">'
@@ -4430,6 +4794,20 @@ class MainWindow(QMainWindow):
         content = MainWindow._clean_model_text(content)
         code_fragments: list[tuple[str, str]] = []
 
+        # Preserve any pre-compiled diagram HTML blocks or images so markdown escaping never damages them
+        def preserve_html(match: re.Match[str]) -> str:
+            token = match.group(0)
+            placeholder = f"FUSERIOCODETOKEN{len(code_fragments)}END"
+            code_fragments.append((placeholder, token))
+            return placeholder
+
+        content = re.sub(
+            r"<table[\s\S]*?</table>|<div[\s\S]*?</div>|<img\s+[^>]*src=[\"']data:image/[^\"']+[\"'][^>]*\/?>",
+            preserve_html,
+            content,
+            flags=re.IGNORECASE,
+        )
+
         def preserve_code(match: re.Match[str]) -> str:
             token = match.group(0)
             placeholder = f"FUSERIOCODETOKEN{len(code_fragments)}END"
@@ -4437,6 +4815,21 @@ class MainWindow(QMainWindow):
                 code_lines = token[3:-3].split("\n", 1)
                 language = code_lines[0].strip()
                 code = code_lines[1] if len(code_lines) > 1 else code_lines[0]
+                if language.lower() in ("dot", "graphviz"):
+                    b64_png = render_dot_to_base64_png(code)
+                    if b64_png:
+                        rendered_code = (
+                            '<table width="100%" cellspacing="0" cellpadding="0" style="margin:12px 0;">'
+                            '<tr><td>'
+                            '<div style="background:rgba(4,14,30,0.65);border:1px solid rgba(88,216,208,0.22);border-left:2px solid #57fabc;border-radius:6px;padding:12px;text-align:center;">'
+                            '<div style="color:#57fabc;font-family:monospace;font-size:10px;font-weight:bold;margin-bottom:8px;text-align:left;">'
+                            '📊 REAL-TIME GRAPHVIZ DIAGRAM · GCE CURRICULUM ARCHITECTURE</div>'
+                            f'<img src="data:image/png;base64,{b64_png}" style="max-width:100%;border-radius:4px;" />'
+                            '</div>'
+                            '</td></tr></table>'
+                        )
+                        code_fragments.append((placeholder, rendered_code))
+                        return placeholder
                 language_label = html.escape(language.upper() or "CODE")
                 rendered_code = (
                     '<table width="100%" cellspacing="0" cellpadding="0" bgcolor="#030e20" '

@@ -145,11 +145,11 @@ class SpotlightSearchPopup(QFrame):
             ("lab", "ohms-law", "⚡ Lab: Ohm's Law & Circuit Simulation"),
             ("lab", "pendulum-lab", "⏱ Lab: Simple Pendulum & Gravitational Period"),
             ("math", "math-lab", "📊 Math Data Lab: Function Plotter & XY Regression"),
-            ("chat", "ai-workspace", "🤖 Ask Fuserio AI: Local offline tutor"),
+            ("chat", "ai-workspace", ">_ Terminal: Fuserio Neural Offline AI Tutor"),
         ]
 
-        # Add "Ask Fuserio AI" top option
-        ask_item = QListWidgetItem(f"🤖 Ask Fuserio AI: \"{query}\"")
+        # Add "Terminal Prompt" top option
+        ask_item = QListWidgetItem(f">_ Terminal: \"{query}\"")
         ask_item.setData(Qt.UserRole, ("ai_prompt", query))
         self.list_widget.addItem(ask_item)
 
