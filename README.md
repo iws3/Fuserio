@@ -2,11 +2,11 @@
 
 **Your private local AI workspace and Cameroon GCE study tutor.** Fuserio runs as a desktop app and connects to llama.cpp on your computer.
 
-![Animated Fuserio walkthrough: choose a GCE level, see a Physics tutor answer stream, and play a projectile-motion lab](assets/fuserio-demo.gif)
+![Animated Fuserio walkthrough: explore the desktop and terminal, build a titration station from cupboard equipment, and observe the indicator endpoint](assets/fuserio-demo.gif)
 
-[Download the MP4 version](assets/fuserio-demo.mp4)
+[Watch the smooth MP4 showcase](assets/fuserio-demo.mp4)
 
-The demo shows the GCE flow, a Physics answer being generated progressively with a live token counter, and a running projectile-motion experiment. It uses sample content and does not need or start an AI model.
+The model-free showcase opens on the Fuserio desktop, inspects a local model from the terminal, then builds an acid-base titration station by moving equipment from the cupboard onto the virtual bench. It demonstrates sample preparation, indicator colour change, and the pH jump near equivalence without starting or downloading an AI model.
 
 ## Get Started
 
@@ -97,14 +97,13 @@ Fuserio is designed for local use. Chat requests go to a llama.cpp server on you
 
 ## Rebuild the Demo
 
-The looping GIF is embedded above so it plays directly in GitHub's README. To recreate it after changing the interface, install FFmpeg if it is not already available, then run:
+The looping GIF is embedded above so it plays directly in GitHub's README. Rebuild the MP4 and GIF with:
 
 ```bash
-sudo apt install ffmpeg
-.venv/bin/python scripts/capture_demo.py
+.venv/bin/python scripts/capture_showcase.py
 ```
 
-The script captures the app's real screens with sample content, crossfades between them, and reveals the sample tutor answer progressively. It writes `assets/fuserio-demo.gif` and `assets/fuserio-demo.mp4`. It does not connect to a model or include personal chat history.
+FFmpeg must be installed. The capture uses the real desktop app, eases each cupboard tool onto the titration bench, and renders a 24 fps MP4 plus an 8 fps looping GIF preview. It uses sample content, does not connect to a model, and does not include personal chat history.
 
 ## Troubleshooting
 
@@ -118,5 +117,5 @@ The script captures the app's real screens with sample content, crossfades betwe
 - `localchat/` contains the desktop UI, local chat client, and GCE tutor flow.
 - `localchat/lab_data.py` and `localchat/lab_widgets.py` contain the experiment catalog and offline simulations.
 - `assets/fus-fuserio.png` is the app logo; `fus.png` is the supplied source artwork.
-- `scripts/capture_demo.py` rebuilds the README demo.
+- `scripts/capture_showcase.py` rebuilds the README demo.
 - `tests/` contains the GCE flow and formatted math regression tests.

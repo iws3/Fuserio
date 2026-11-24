@@ -643,6 +643,10 @@ def test_titration_workbench_integration_in_main_window(window):
     window.open_experiment("titration")
 
     assert window.active_experiment.identifier == "titration"
+    assert not window.lab_titration_cupboard.isHidden()
+    assert window.lab_detail_main_layout.indexOf(window.lab_titration_cupboard) < (
+        window.lab_detail_main_layout.indexOf(window.lab_workspace)
+    )
     assert not window.lab_canvas.timer.isActive()
     assert "volume" in window.lab_parameter_sliders
     assert "volume" in window.lab_parameter_labels
@@ -651,11 +655,24 @@ def test_titration_workbench_integration_in_main_window(window):
     canvas = window.lab_canvas
     canvas.place_titration_equipment("flask", canvas.rect().center())
     canvas.place_titration_equipment("pipette", canvas.rect().center())
+    canvas.place_titration_equipment("burette", canvas.rect().center())
+    canvas.place_titration_equipment("retort_stand", canvas.rect().center())
+    canvas.place_titration_equipment("ph_meter", canvas.rect().center())
+    stand_button = window.titration_equipment_buttons["retort_stand"]
+    assert stand_button.isChecked()
+    stand_button.click()
+    assert not canvas.titration_station_built
+    assert not stand_button.isChecked()
+    stand_button.click()
+    assert canvas.titration_station_built
+    assert stand_button.isChecked()
     assert window.titration_action_buttons["pipette_acid"].isEnabled()
+    assert not window.lab_play_button.isEnabled()
     window.titration_action_buttons["pipette_acid"].click()
 
     canvas.place_titration_equipment("indicator", canvas.rect().center())
     window.titration_action_buttons["add_indicator"].click()
+    assert window.lab_play_button.isEnabled()
     canvas.place_titration_equipment("burette", canvas.rect().center())
     assert window.titration_action_buttons["dropwise"].isEnabled()
 
@@ -707,7 +724,7 @@ def test_titration_tutor_uses_offline_guidance_without_model_server(window):
 
     assert "Live simulation check" in window.lab_tutor_content
     assert "MODEL pH: --" in window.lab_tutor_content
-    assert "STEP 1" in window.lab_tutor_content
+    assert "BUILD THE APPARATUS" in window.lab_tutor_content
     assert not FakeChatWorker.instances
 
 

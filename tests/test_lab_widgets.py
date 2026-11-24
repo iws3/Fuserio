@@ -7,7 +7,7 @@ from PySide6.QtCore import QMimeData, QPointF, Qt
 from PySide6.QtGui import QDropEvent
 
 from localchat.lab_data import EXPERIMENTS, experiment_by_id
-from localchat.lab_widgets import EQUIPMENT_MIME_TYPE, LabCanvas
+from localchat.lab_widgets import BenchEquipmentItem, EQUIPMENT_MIME_TYPE, LabCanvas
 
 
 def app():
@@ -182,6 +182,7 @@ def test_titration_drag_drop_builds_and_unlocks_the_bench():
     assert canvas.measurements()["MODEL pH"] == "--"
     assert "SETUP REQUIRED" in canvas.measurements()["STATUS"]
     assert not canvas.titration_action_ready("pipette_acid")
+    assert not canvas.titration_station_built
 
     def drop_equipment(equipment_id, position):
         mime_data = QMimeData()
@@ -198,15 +199,35 @@ def test_titration_drag_drop_builds_and_unlocks_the_bench():
 
     drop_equipment("flask", QPointF(180, 400))
     drop_equipment("pipette", QPointF(270, 400))
+    flask_item = canvas._equipment_items["flask"]
+    assert isinstance(flask_item, BenchEquipmentItem)
+    assert abs(flask_item.geometry().center().x() - 180) <= 2
+    flask_item.move(30, 40)
+    canvas._remember_equipment_position("flask", flask_item.pos())
+    assert canvas.titration_equipment_positions["flask"] != (0.25, 0.8)
+    assert not canvas.titration_action_ready("pipette_acid")
+    drop_equipment("burette", QPointF(400, 360))
+    drop_equipment("retort_stand", QPointF(500, 360))
+    drop_equipment("ph_meter", QPointF(620, 360))
+    assert canvas.titration_station_built
     assert canvas.titration_action_ready("pipette_acid")
     canvas.titration_action("pipette_acid")
     assert canvas.measurements()["MODEL pH"] != "--"
 
     drop_equipment("indicator", QPointF(360, 400))
+    drop_equipment("wash_bottle", QPointF(360, 400))
+    assert not canvas._equipment_items["indicator"].geometry().intersects(
+        canvas._equipment_items["wash_bottle"].geometry()
+    )
     assert canvas.titration_action_ready("add_indicator")
     canvas.titration_action("add_indicator")
-    drop_equipment("burette", QPointF(450, 400))
     assert canvas.titration_action_ready("dropwise")
+    assert canvas._equipment_items["flask"].isHidden()
+    assert not canvas._equipment_items["pipette"].isHidden()
+
+    canvas.remove_titration_equipment("retort_stand")
+    assert not canvas.titration_station_built
+    assert not canvas._equipment_items["flask"].isHidden()
 
     canvas.reset()
     assert not canvas.titration_equipment

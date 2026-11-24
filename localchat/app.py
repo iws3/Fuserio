@@ -75,7 +75,12 @@ from localchat.lab_data import (
     model_equation,
     model_limitation,
 )
-from localchat.lab_widgets import DraggableEquipmentButton, LabCanvas
+from localchat.lab_widgets import (
+    DraggableEquipmentButton,
+    LabCanvas,
+    TITRATION_CORE_APPARATUS,
+    TITRATION_EQUIPMENT,
+)
 from localchat.titration_gif import create_titration_gif
 from localchat.chemistry_practicals import (
     CHEMISTRY,
@@ -2128,6 +2133,22 @@ class MainWindow(QMainWindow):
         self.lab_detail_subtitle.setObjectName("studySubheading")
         self.lab_detail_main_layout.addWidget(self.lab_detail_subtitle)
 
+        self.lab_titration_cupboard = QWidget()
+        self.lab_titration_cupboard.setObjectName("titrationCupboard")
+        cupboard_layout = QVBoxLayout(self.lab_titration_cupboard)
+        cupboard_layout.setContentsMargins(0, 3, 0, 3)
+        cupboard_layout.setSpacing(3)
+        self.lab_titration_cupboard_layout = QGridLayout()
+        self.lab_titration_cupboard_layout.setContentsMargins(0, 0, 0, 0)
+        self.lab_titration_cupboard_layout.setHorizontalSpacing(6)
+        self.lab_titration_cupboard_layout.setVerticalSpacing(4)
+        cupboard_heading = QLabel("CUPBOARD · DRAG TO BENCH · CLICK TO PLACE / RETURN")
+        cupboard_heading.setObjectName("labControlLabel")
+        cupboard_layout.addWidget(cupboard_heading)
+        cupboard_layout.addLayout(self.lab_titration_cupboard_layout)
+        self.lab_titration_cupboard.hide()
+        self.lab_detail_main_layout.addWidget(self.lab_titration_cupboard)
+
         self.lab_workspace = QWidget()
         self.lab_workspace_layout = QVBoxLayout(self.lab_workspace)
         self.lab_workspace_layout.setContentsMargins(0, 0, 0, 0)
@@ -3122,6 +3143,7 @@ class MainWindow(QMainWindow):
         self.active_experiment = experiment
         self.lab_detail_title.setText(experiment.title)
         self.lab_detail_subtitle.setText(f"{experiment.subject.upper()}  /  VIRTUAL PRE-LAB  /  {experiment.subtitle}")
+        self.lab_titration_cupboard.setVisible(identifier == "titration")
         self.lab_objective.setText(f"<b>INVESTIGATE</b>  {html.escape(experiment.objective)}")
         self.lab_equation.setHtml(self._format_message_content(model_equation(identifier)))
         self.lab_model_note.setText(f"MODEL LIMIT  /  {html.escape(model_limitation(identifier))}")
@@ -3130,6 +3152,12 @@ class MainWindow(QMainWindow):
             self.lab_canvas.set_playground(experiment)
         else:
             self.lab_canvas.set_experiment(experiment)
+        if identifier == "titration":
+            self.lab_canvas.setMinimumHeight(360)
+            self.lab_canvas_shell.setMinimumHeight(400)
+        else:
+            self.lab_canvas.setMinimumHeight(480)
+            self.lab_canvas_shell.setMinimumHeight(520)
         self.lab_canvas.set_playback_rate(self.lab_speed_slider.value() / 100)
         self._build_lab_controls(experiment)
         self._update_lab_metrics()
@@ -3198,23 +3226,29 @@ class MainWindow(QMainWindow):
             title_label.setStyleSheet("font-weight: bold; color: #57fabc; font-size: 11px;")
             wb_layout.addWidget(title_label)
 
-            cupboard_title = QLabel("CUPBOARD · DRAG EQUIPMENT ONTO THE BENCH")
-            cupboard_title.setObjectName("labControlLabel")
-            wb_layout.addWidget(cupboard_title)
-            cupboard_row = QHBoxLayout()
-            cupboard_row.setSpacing(6)
-            for equipment_id, label in (
+            self._clear_layout(self.lab_titration_cupboard_layout)
+            self.titration_equipment_buttons = {}
+            cupboard_tools = (
                 ("flask", "Flask"),
-                ("pipette", "Pipette"),
-                ("indicator", "Indicator"),
                 ("burette", "Burette"),
+                ("retort_stand", "Stand"),
+                ("ph_meter", "pH meter"),
+                ("pipette", "Pipette"),
+                ("indicator", "Dropper"),
                 ("wash_bottle", "Wash bottle"),
-            ):
+            )
+            for index, (equipment_id, label) in enumerate(cupboard_tools):
                 equipment_button = DraggableEquipmentButton(equipment_id, label)
                 equipment_button.setObjectName("studyModeButton")
-                equipment_button.setToolTip(f"Drag {label.lower()} onto the animated lab bench")
-                cupboard_row.addWidget(equipment_button)
-            wb_layout.addLayout(cupboard_row)
+                equipment_button.setCheckable(True)
+                equipment_button.setToolTip(
+                    f"Drag to place {TITRATION_EQUIPMENT[equipment_id].lower()}; click to place or return it"
+                )
+                equipment_button.clicked.connect(
+                    lambda _checked=False, value=equipment_id: self._toggle_titration_equipment(value)
+                )
+                self.titration_equipment_buttons[equipment_id] = equipment_button
+                self.lab_titration_cupboard_layout.addWidget(equipment_button, index // 4, index % 4)
 
             self.titration_setup_label = QLabel()
             self.titration_setup_label.setObjectName("labModelNote")
@@ -3479,6 +3513,9 @@ class MainWindow(QMainWindow):
             slider.setRange(parameter.minimum, parameter.maximum)
             slider.setValue(parameter.value)
             slider.setAccessibleName(parameter.label)
+            if experiment.identifier == "titration" and parameter.key == "volume":
+                slider.setEnabled(False)
+                slider.setToolTip("Titrant volume is controlled by the burette dispensing tools above.")
             slider.valueChanged.connect(
                 lambda value, item=parameter: self._lab_parameter_changed(item, value)
             )
@@ -3520,12 +3557,25 @@ class MainWindow(QMainWindow):
             return
 
         canvas = self.lab_canvas
+        for equipment_id, button in self.titration_equipment_buttons.items():
+            button.blockSignals(True)
+            button.setChecked(equipment_id in canvas.titration_equipment)
+            button.blockSignals(False)
         for action, button in self.titration_action_buttons.items():
             button.setEnabled(canvas.titration_action_ready(action))
+        self.lab_play_button.setEnabled(
+            canvas.titration_station_built
+            and canvas.titration_analyte_pipetted
+            and canvas.titration_indicator_drops > 0
+        )
 
         equipment = canvas.titration_equipment
-        if not {"flask", "pipette"}.issubset(equipment):
-            guidance = "STEP 1 · Place the conical flask and volumetric pipette on the bench."
+        missing_apparatus = TITRATION_CORE_APPARATUS.difference(equipment)
+        if missing_apparatus:
+            missing_labels = ", ".join(TITRATION_EQUIPMENT[item].title() for item in sorted(missing_apparatus))
+            guidance = f"BUILD THE APPARATUS · Add {missing_labels}. Drag tools around the table to arrange them."
+        elif not {"flask", "pipette"}.issubset(equipment):
+            guidance = "STEP 1 · Place the volumetric pipette beside the assembled station."
         elif not canvas.titration_analyte_pipetted:
             guidance = "STEP 2 · Transfer exactly 25.0 mL of analyte into the flask."
         elif "indicator" not in equipment or canvas.titration_indicator_drops == 0:
@@ -3544,6 +3594,13 @@ class MainWindow(QMainWindow):
     def _titration_action(self, action: str):
         self.lab_canvas.titration_action(action)
         self._sync_lab_runtime()
+
+    def _toggle_titration_equipment(self, equipment_id: str):
+        canvas = self.lab_canvas
+        if equipment_id in canvas.titration_equipment:
+            canvas.remove_titration_equipment(equipment_id)
+            return
+        canvas.place_titration_equipment(equipment_id, canvas.rect().center())
 
     def _reaction_rate_action(self, action: str):
         self.lab_canvas.reaction_rate_action(action)

@@ -1,6 +1,6 @@
 import math
 
-from PySide6.QtCore import QMimeData, QPointF, QRectF, QTimer, Qt, Signal
+from PySide6.QtCore import QMimeData, QPointF, QRect, QRectF, QTimer, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QDrag, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
@@ -20,10 +20,23 @@ EQUIPMENT_MIME_TYPE = "application/x-fuserio-lab-equipment"
 TITRATION_EQUIPMENT = {
     "flask": "CONICAL FLASK",
     "pipette": "VOLUMETRIC PIPETTE",
+    "indicator": "INDICATOR DROPPER",
+    "burette": "BURETTE",
+    "wash_bottle": "WASH BOTTLE",
+    "retort_stand": "RETORT STAND",
+    "ph_meter": "pH METER + PROBE",
+}
+TITRATION_EQUIPMENT_CAPTIONS = {
+    "flask": "FLASK",
+    "pipette": "PIPETTE",
     "indicator": "INDICATOR",
     "burette": "BURETTE",
     "wash_bottle": "WASH BOTTLE",
+    "retort_stand": "STAND",
+    "ph_meter": "pH METER",
 }
+TITRATION_ASSEMBLY = frozenset(TITRATION_EQUIPMENT)
+TITRATION_CORE_APPARATUS = frozenset({"flask", "burette", "retort_stand", "ph_meter"})
 
 
 class DraggableEquipmentButton(QPushButton):
@@ -54,7 +67,120 @@ class DraggableEquipmentButton(QPushButton):
         mime_data.setData(EQUIPMENT_MIME_TYPE, self.equipment_id.encode("utf-8"))
         drag.setMimeData(mime_data)
         drag.exec(Qt.DropAction.CopyAction)
+        self.setDown(False)
         self._press_position = None
+
+
+class BenchEquipmentItem(QWidget):
+    def __init__(self, equipment_id: str, parent=None):
+        super().__init__(parent)
+        self.equipment_id = equipment_id
+        self._drag_offset = None
+        self.setFixedSize(*self._item_size())
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self.setToolTip(f"{TITRATION_EQUIPMENT[equipment_id]} · drag to reposition · right-click to return")
+        self.setAccessibleName(f"Placed {TITRATION_EQUIPMENT[equipment_id]}; drag to reposition")
+
+    def _item_size(self):
+        return {
+            "flask": (94, 94),
+            "burette": (52, 124),
+            "pipette": (104, 42),
+            "indicator": (54, 72),
+            "wash_bottle": (66, 78),
+            "retort_stand": (76, 118),
+            "ph_meter": (92, 82),
+        }.get(self.equipment_id, (76, 64))
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.RightButton:
+            self.parent().remove_titration_equipment(self.equipment_id)
+            event.accept()
+            return
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = event.position().toPoint()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_offset is None or not event.buttons() & Qt.MouseButton.LeftButton:
+            super().mouseMoveEvent(event)
+            return
+        canvas = self.parentWidget()
+        target = canvas.mapFromGlobal(event.globalPosition().toPoint()) - self._drag_offset
+        x = max(0, min(target.x(), canvas.width() - self.width()))
+        y = max(0, min(target.y(), canvas.height() - self.height()))
+        self.move(x, y)
+        canvas._remember_equipment_position(self.equipment_id, self.pos())
+        canvas.update()
+
+    def mouseReleaseEvent(self, event):
+        self._drag_offset = None
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, _event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor("#a8ddd0"), 2))
+        painter.setBrush(QColor(7, 24, 38, 238))
+        painter.drawRoundedRect(self.rect().adjusted(3, 3, -4, -4), 11, 11)
+        center_x = self.width() / 2
+        item = self.equipment_id
+        center_y = self.height() / 2 - (18 if item in {"indicator", "wash_bottle"} else 7)
+        painter.setPen(QPen(QColor("#d8f6ec"), 2))
+        painter.setBrush(QColor(87, 250, 188, 58))
+        if item == "flask":
+            path = QPainterPath()
+            path.moveTo(center_x - 8, center_y - 27)
+            path.lineTo(center_x + 8, center_y - 27)
+            path.lineTo(center_x + 8, center_y - 8)
+            path.lineTo(center_x + 27, center_y + 24)
+            path.quadTo(center_x + 29, center_y + 30, center_x + 20, center_y + 30)
+            path.lineTo(center_x - 20, center_y + 30)
+            path.quadTo(center_x - 29, center_y + 30, center_x - 27, center_y + 24)
+            path.lineTo(center_x - 8, center_y - 8)
+            path.closeSubpath()
+            painter.drawPath(path)
+        elif item == "burette":
+            painter.drawRoundedRect(QRectF(center_x - 7, center_y - 46, 14, 76), 4, 4)
+            painter.setPen(QPen(QColor("#57fabc"), 1))
+            for tick in range(6):
+                y = center_y - 36 + tick * 12
+                painter.drawLine(int(center_x), int(y), int(center_x + 6), int(y))
+            painter.setPen(QPen(QColor("#d8f6ec"), 2))
+            painter.drawLine(int(center_x), int(center_y + 30), int(center_x), int(center_y + 40))
+            painter.drawEllipse(QRectF(center_x - 9, center_y + 1, 18, 8))
+        elif item == "pipette":
+            painter.drawRoundedRect(QRectF(center_x - 36, center_y - 7, 64, 14), 6, 6)
+            painter.drawLine(int(center_x + 28), int(center_y), int(center_x + 42), int(center_y))
+            painter.drawLine(int(center_x - 28), int(center_y - 8), int(center_x - 28), int(center_y + 8))
+        elif item == "indicator":
+            painter.drawRoundedRect(QRectF(center_x - 13, center_y - 19, 26, 34), 8, 8)
+            painter.drawLine(int(center_x), int(center_y + 15), int(center_x), int(center_y + 23))
+            painter.drawEllipse(QRectF(center_x - 3, center_y + 22, 6, 7))
+        elif item == "wash_bottle":
+            painter.drawRoundedRect(QRectF(center_x - 20, center_y - 5, 40, 34), 8, 8)
+            painter.drawLine(int(center_x + 9), int(center_y - 5), int(center_x + 9), int(center_y - 20))
+            painter.drawLine(int(center_x + 9), int(center_y - 20), int(center_x + 25), int(center_y - 20))
+            painter.drawLine(int(center_x + 25), int(center_y - 20), int(center_x + 31), int(center_y - 26))
+        elif item == "retort_stand":
+            painter.drawRoundedRect(QRectF(center_x - 4, center_y - 43, 8, 78), 3, 3)
+            painter.drawRoundedRect(QRectF(center_x - 28, center_y + 29, 56, 9), 4, 4)
+            painter.drawLine(int(center_x), int(center_y - 20), int(center_x + 23), int(center_y - 20))
+            painter.drawLine(int(center_x + 15), int(center_y - 25), int(center_x + 15), int(center_y - 15))
+        elif item == "ph_meter":
+            painter.drawRoundedRect(QRectF(center_x - 35, center_y - 23, 70, 42), 7, 7)
+            painter.setPen(QColor("#57fabc"))
+            painter.drawText(QRectF(center_x - 27, center_y - 17, 54, 26), Qt.AlignmentFlag.AlignCenter, "pH  7.00")
+            painter.setPen(QPen(QColor("#d8f6ec"), 2))
+            painter.drawLine(int(center_x + 22), int(center_y + 16), int(center_x + 35), int(center_y + 32))
+        painter.setPen(QColor("#c8e8df"))
+        painter.setFont(QFont("sans-serif", 7, QFont.Weight.Bold))
+        painter.drawText(QRectF(2, self.height() - 17, self.width() - 4, 14), Qt.AlignmentFlag.AlignCenter,
+                         TITRATION_EQUIPMENT_CAPTIONS[item])
 
 
 class LabCanvas(QWidget):
@@ -87,7 +213,7 @@ class LabCanvas(QWidget):
         self.titration_drop_progress: float = 0.0
         self.titration_equipment: set[str] = set()
         self.titration_equipment_positions: dict[str, tuple[float, float]] = {}
-        self._equipment_badges: dict[str, QLabel] = {}
+        self._equipment_items: dict[str, BenchEquipmentItem] = {}
 
         # Realistic Reaction Rate Laboratory State (Gas Syringe)
         self.reaction_gas_ml: float = 0.0
@@ -122,6 +248,7 @@ class LabCanvas(QWidget):
         if parameters:
             self.parameters.update(parameters)
         if experiment.identifier == "titration":
+            self.show_equipment_labels = False
             self.titration_analyte_ml = 25.0
             self.titration_analyte_pipetted = False
             self.titration_indicator_drops = 0
@@ -190,9 +317,9 @@ class LabCanvas(QWidget):
     def _clear_titration_equipment(self):
         self.titration_equipment.clear()
         self.titration_equipment_positions.clear()
-        for badge in self._equipment_badges.values():
-            badge.deleteLater()
-        self._equipment_badges.clear()
+        for item in self._equipment_items.values():
+            item.deleteLater()
+        self._equipment_items.clear()
 
     def place_titration_equipment(self, equipment_id: str, position: QPointF):
         if (
@@ -203,37 +330,77 @@ class LabCanvas(QWidget):
             return False
 
         self.titration_equipment.add(equipment_id)
-        self.titration_equipment_positions[equipment_id] = (
-            max(0.0, min(1.0, position.x() / max(1, self.width()))),
-            max(0.0, min(1.0, position.y() / max(1, self.height()))),
+        item = self._equipment_items.get(equipment_id)
+        if item is None:
+            item = BenchEquipmentItem(equipment_id, self)
+            self._equipment_items[equipment_id] = item
+        x = max(0, min(int(position.x() - item.width() / 2), self.width() - item.width()))
+        y = max(0, min(int(position.y() - item.height() / 2), self.height() - item.height()))
+        candidate = QRect(x, y, item.width(), item.height())
+        overlaps = lambda rect: any(
+            other_id != equipment_id
+            and not other.isHidden()
+            and rect.intersects(other.geometry().adjusted(-8, -8, 8, 8))
+            for other_id, other in self._equipment_items.items()
         )
-        badge = self._equipment_badges.get(equipment_id)
-        if badge is None:
-            badge = QLabel(TITRATION_EQUIPMENT[equipment_id], self)
-            badge.setStyleSheet(
-                "QLabel { color: #dffdf1; background: rgba(3, 18, 30, 225); "
-                "border: 1px solid #57fabc; border-radius: 5px; padding: 4px 7px; "
-                "font-size: 9px; font-weight: 700; }"
+        if overlaps(candidate):
+            offsets = (
+                (112, 0), (-112, 0), (0, 112), (0, -112),
+                (112, 112), (-112, 112), (112, -112), (-112, -112),
+                (224, 0), (-224, 0), (0, 224), (0, -224),
             )
-            badge.adjustSize()
-            self._equipment_badges[equipment_id] = badge
-        self._position_equipment_badges()
-        badge.show()
+            for offset_x, offset_y in offsets:
+                candidate_x = max(0, min(x + offset_x, self.width() - item.width()))
+                candidate_y = max(0, min(y + offset_y, self.height() - item.height()))
+                candidate = QRect(candidate_x, candidate_y, item.width(), item.height())
+                if not overlaps(candidate):
+                    x, y = candidate_x, candidate_y
+                    break
+        item.move(x, y)
+        self._remember_equipment_position(equipment_id, item.pos())
+        item.show()
+        self._sync_equipment_item_visibility()
         self.equipment_placed.emit(equipment_id)
         self.metrics_updated.emit()
         self.update()
         return True
 
-    def _position_equipment_badges(self):
-        for equipment_id, badge in self._equipment_badges.items():
+    def _remember_equipment_position(self, equipment_id: str, position):
+        self.titration_equipment_positions[equipment_id] = (
+            max(0.0, min(1.0, position.x() / max(1, self.width()))),
+            max(0.0, min(1.0, position.y() / max(1, self.height()))),
+        )
+
+    def _sync_equipment_item_visibility(self):
+        apparatus_built = self.titration_station_built
+        for equipment_id, item in self._equipment_items.items():
+            item.setVisible(not apparatus_built or equipment_id not in TITRATION_CORE_APPARATUS)
+
+    @property
+    def titration_station_built(self) -> bool:
+        return TITRATION_CORE_APPARATUS.issubset(self.titration_equipment)
+
+    def remove_titration_equipment(self, equipment_id: str):
+        item = self._equipment_items.pop(equipment_id, None)
+        if item is None:
+            return
+        item.deleteLater()
+        self.titration_equipment.discard(equipment_id)
+        self.titration_equipment_positions.pop(equipment_id, None)
+        self._sync_equipment_item_visibility()
+        self.metrics_updated.emit()
+        self.update()
+
+    def _position_equipment_items(self):
+        for equipment_id, item in self._equipment_items.items():
             x_ratio, y_ratio = self.titration_equipment_positions.get(equipment_id, (0.0, 0.0))
-            x = min(max(0, int(x_ratio * self.width())), max(0, self.width() - badge.width()))
-            y = min(max(0, int(y_ratio * self.height())), max(0, self.height() - badge.height()))
-            badge.move(x, y)
+            x = min(max(0, int(x_ratio * self.width())), max(0, self.width() - item.width()))
+            y = min(max(0, int(y_ratio * self.height())), max(0, self.height() - item.height()))
+            item.move(x, y)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._position_equipment_badges()
+        self._position_equipment_items()
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasFormat(EQUIPMENT_MIME_TYPE):
@@ -261,17 +428,21 @@ class LabCanvas(QWidget):
         equipment = self.titration_equipment
         sample_ready = self.titration_analyte_pipetted
         if action == "pipette_acid":
-            return {"flask", "pipette"}.issubset(equipment)
+            return self.titration_station_built and "pipette" in equipment
         if action == "add_indicator":
-            return sample_ready and {"flask", "indicator"}.issubset(equipment)
+            return sample_ready and self.titration_station_built and "indicator" in equipment
         if action == "wash_water":
-            return sample_ready and {"flask", "wash_bottle"}.issubset(equipment)
+            return sample_ready and self.titration_station_built and "wash_bottle" in equipment
         if action == "fill_burette":
-            return "burette" in equipment
+            return self.titration_station_built
         if action in {"dropwise", "add_half_ml", "add_1ml"}:
-            return sample_ready and self.titration_indicator_drops > 0 and "burette" in equipment
+            return (
+                sample_ready
+                and self.titration_station_built
+                and self.titration_indicator_drops > 0
+            )
         if action == "swirl":
-            return sample_ready and "flask" in equipment
+            return sample_ready and self.titration_station_built
         return action == "reset"
 
     def play(self):
@@ -1258,6 +1429,19 @@ class LabCanvas(QWidget):
         painter.drawLine(QPointF(0, bench_y), QPointF(W, bench_y))
         painter.setPen(QPen(QColor(88, 216, 208, 60), 1))
         painter.drawLine(QPointF(0, bench_y + 2), QPointF(W, bench_y + 2))
+
+        if not self.titration_station_built:
+            painter.setPen(QColor("#a8ddd0"))
+            painter.setFont(QFont("sans-serif", 11, QFont.Weight.Bold))
+            painter.drawText(QRectF(24, bench_y - 78, W - 48, 28), Qt.AlignCenter,
+                             "BUILD YOUR TITRATION STATION")
+            painter.setPen(QColor("#7ea5c4"))
+            painter.setFont(QFont("sans-serif", 9))
+            missing = TITRATION_CORE_APPARATUS.difference(self.titration_equipment)
+            missing_names = ", ".join(TITRATION_EQUIPMENT[item].title() for item in sorted(missing))
+            painter.drawText(QRectF(24, bench_y - 50, W - 48, 24), Qt.AlignCenter,
+                             f"Place on the bench: {missing_names}")
+            return
 
         # --- 2. Retort Stand Base & Vertical Steel Rod ---
         # Stand Base (Cast-Iron Heavy Rectangular Block)
